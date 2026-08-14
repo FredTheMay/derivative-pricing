@@ -21,7 +21,12 @@ target_compile_options(mcd_warnings INTERFACE
     $<$<BOOL:${MCD_WARNINGS_AS_ERRORS}>:-Werror>
 )
 
-add_library(mcd_core src/core/types.cpp)
+add_library(mcd_core
+    src/core/types.cpp
+    src/core/normal.cpp
+    src/pricers/analytic.cpp
+    src/pricers/binomial.cpp
+)
 target_include_directories(mcd_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 )

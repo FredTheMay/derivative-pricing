@@ -1,5 +1,7 @@
 add_executable(mcd_tests
     version_test.cpp
+    analytic_test.cpp
+    cfa_invariants_test.cpp
 )
 
 target_link_libraries(mcd_tests PRIVATE
