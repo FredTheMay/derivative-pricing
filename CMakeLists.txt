@@ -21,10 +21,13 @@ target_compile_options(mcd_warnings INTERFACE
     $<$<BOOL:${MCD_WARNINGS_AS_ERRORS}>:-Werror>
 )
 
+find_package(Threads REQUIRED)
+
 add_library(mcd_core
     src/core/types.cpp
     src/core/normal.cpp
     src/core/rng.cpp
+    src/core/thread_pool.cpp
     src/models/gbm.cpp
     src/pricers/analytic.cpp
     src/pricers/binomial.cpp
@@ -35,7 +38,7 @@ target_include_directories(mcd_core PUBLIC
 )
 target_compile_features(mcd_core PUBLIC cxx_std_20)
 target_compile_definitions(mcd_core PRIVATE MCD_VERSION_STRING="${PROJECT_VERSION}")
-target_link_libraries(mcd_core PRIVATE mcd_warnings)
+target_link_libraries(mcd_core PRIVATE mcd_warnings PUBLIC Threads::Threads)
 
 if(MCD_ENABLE_TESTING)
     include(FetchContent)
@@ -56,6 +59,13 @@ if(MCD_ENABLE_BENCHMARKS)
     set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
     set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
     set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+    # Google Benchmark's own build enables -Werror on its own sources by default;
+    # this only affects how *their* code is compiled, not ours (mcd_warnings, with
+    # its own -Werror controlled by MCD_WARNINGS_AS_ERRORS, is unaffected). Disabled
+    # because a sufficiently new compiler can trip warnings in benchmark.h that
+    # didn't exist when v1.9.1 was released -- not something this project's own
+    # code quality bar should be blocked on.
+    set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(
         benchmark
         GIT_REPOSITORY https://github.com/google/benchmark.git

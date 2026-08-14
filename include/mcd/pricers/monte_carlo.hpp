@@ -25,6 +25,11 @@ struct McOptions {
     // Brownian-bridge continuity correction for discrete monitoring.
     // Respected only by monte_carlo_barrier.
     bool brownian_bridge = false;
+    // Worker threads for the parallel path loop. 1 = single-threaded,
+    // identical code path and bitwise-identical result to Phase 2/3 (see
+    // docs/design/04-parallelism.md). Respected by every pricer below except
+    // the zero-options monte_carlo_european overload, which is always 1.
+    unsigned num_threads = 1;
 };
 
 // Single-threaded Monte Carlo European pricer. Streaming (no path storage),

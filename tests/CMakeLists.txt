@@ -8,6 +8,7 @@ add_executable(mcd_tests
     exotics_mc_test.cpp
     variance_reduction_test.cpp
     convergence_test.cpp
+    parallelism_test.cpp
 )
 
 target_link_libraries(mcd_tests PRIVATE

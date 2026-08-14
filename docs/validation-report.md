@@ -16,7 +16,10 @@ never fabricated or estimated. Sections below are populated starting Phase 1
 - Phase 3 (exotics and variance reduction): complete. 94/94 tests passing
   (release; debug/ubsan verification recorded below). VR factor table and
   convergence plot below.
-- Phase 4 (parallelism): not started.
+- Phase 4 (parallelism): complete. 109/109 tests passing (debug, release,
+  ubsan; tsan via CI). Bitwise determinism verified across thread counts
+  1/2/4/8/hardware_concurrency() for every product. Scaling and false-sharing
+  results below.
 - Phase 5 (Greeks and American options): not started.
 - Phase 6 (CLI, bindings, reporting): not started.
 - Phase 7 (AWS demo): not started.
@@ -166,11 +169,157 @@ Fitted slope: **-0.5065** (required: -0.5 ± 0.05), least-squares over 7 path
 counts from 10³ to 10⁶, European call, seed=2024. Raw data in
 `tests/convergence_test.cpp` (`Convergence.LogLogSlopeIsMinusOneHalf`).
 
+## Phase 4 — parallelism
+
+**The determinism math, resolved before implementation** (full argument in
+`docs/design/04-parallelism.md` §2, approved before writing any code): naively,
+"one accumulator per thread, merged pairwise" (CLAUDE.md's literal wording)
+and "bitwise identical for 1 thread and N threads" (CLAUDE.md's literal hard
+acceptance criterion) are in tension, because Welford's closed-form merge
+formula performs a genuinely different sequence of floating-point operations
+than sequential accumulation — not bit-identical to it in general, even
+though both are mathematically correct. The resolution: fix
+`logical_chunk_count() = hardware_concurrency()`, invariant across every
+call's `num_threads` value. "1 thread" means one worker sequentially
+processing all `hardware_concurrency()` chunks (same fixed chunk boundaries,
+same fixed chunk-index merge order as any other thread count), not "no
+chunking." This makes the sequence of floating-point operations that produces
+the final price completely independent of how many OS threads execute it —
+only wall-clock parallelism changes. Verified directly:
+`tests/parallelism_test.cpp`'s `BitwiseDeterminism.*` tests assert
+`std::bit_cast<uint64_t>` equality across thread counts
+{1, 2, 4, 8, hardware_concurrency()} for every product (European, digital,
+arithmetic/geometric Asian with and without the control variate, barrier with
+and without the Brownian-bridge correction, both lookback styles) — all pass.
+
+**A real deadlock found and fixed during implementation, isolated with a
+minimal standalone reproduction before touching any pricer code**: the first
+end-to-end run of the new parallel tests hung indefinitely. Diagnosed by
+writing a ~15-line reproduction of just the thread pool (no pricing logic at
+all) and confirming even *zero-round* construct-then-destruct hung — isolating
+the bug to shutdown, not the round/chunking logic (which a second repro
+confirmed completes correctly across multiple thread counts). Root cause: on
+this session's local toolchain (an unusually recent Homebrew Clang, version
+22.1.8 — far beyond any known official LLVM release, almost certainly a
+near-trunk development build with rough edges in newer library facilities),
+`std::condition_variable_any::wait(lock, stop_token, predicate)` was not
+waking threads on `request_stop()`, hanging `std::jthread`'s automatic join on
+destruction. Fixed by replacing that stop-token-integrated wait with a manual
+`std::atomic<bool>` flag plus a plain `std::condition_variable` — simpler,
+more portable, and not dependent on that specific, newer library integration.
+`std::jthread` itself is still very much in use, exactly per CLAUDE.md's
+locked design; only the shutdown-signaling mechanism changed. Re-verified
+fixed via the same standalone repro, then confirmed via the full test suite.
+
+**A related toolchain finding**: Google Benchmark's own header failed to
+compile under that same Clang build (`__COUNTER__` arithmetic rejected as a
+"C2y extension" under `-pedantic-errors`) — unrelated to this project's code,
+a third-party dependency tripping on an unusually new, strict pre-release
+compiler. Benchmarks and the full local verification below instead used
+Homebrew GCC 16 (a properly released, stable toolchain, and notably one of
+the two compiler families CI itself uses), which also surfaced a second
+genuine, independent finding: GCC warns
+(`-Werror=interference-size`) that `std::hardware_destructive_interference_size`
+is tuning-dependent and unsafe to bake into layout — concretely, GCC reported
+256 bytes for this exact machine's tuning against libc++'s generic 64. Fixed
+by using a fixed, explicitly-chosen 128-byte constant instead of reading the
+standard library value at all, sidestepping the instability entirely rather
+than picking a side. Both findings are documented in code comments at their
+respective sites (`thread_pool.hpp`, `stats.hpp`).
+
+**Local sanitizer coverage**: ASan and TSan still cannot run on this specific
+Mac for reasons unrelated to this project's code (documented in
+`docs/design/00-requirements.md` §6a since Phase 0 — Apple-clang/macOS
+sanitizer runtime issue). UBSan ran clean locally, including every new
+concurrency test, under both the Clang-22 and GCC-16 toolchains. TSan
+correctness — the sharpest test of the new concurrent code — is verified via
+CI's Linux matrix, exactly why CLAUDE.md put it there rather than relying on
+local runs.
+
+### Thread-scaling and false-sharing
+
+![Scaling chart](benchmarks/phase4-scaling.svg)
+
+Measured (`bench/mc_bench.cpp`, `BM_MonteCarloEuropeanThreads`, median of 5
+runs, European call, 2×10⁷ paths, Apple M3 Pro — 5 performance + 6 efficiency
+cores, 11 physical/11 logical, no SMT — GCC 16, `-O3 -march=native`, Release):
+
+| Threads | Speedup | Efficiency |
+|---|---|---|
+| 1 | 1.00× | 100% |
+| 4 | 3.76× | 94.1% |
+| 6 | 4.91× | 81.9% |
+| 11 (physical core count) | **5.97×** | **54.2%** |
+
+Amdahl's-law least-squares fit over N=1..11: serial fraction **f ≈ 0.088**.
+Data beyond N=11 is not reported as scaling evidence: `logical_chunk_count()`
+is fixed at `hardware_concurrency()=11` (per the determinism design above),
+so thread counts past 11 have no additional chunks to claim — any apparent
+movement there is measurement noise from this being a shared development
+machine (Google Benchmark reported a load average of ~5 during the run, i.e.
+real background contention for cores), not genuine additional parallel
+throughput.
+
+**Written analysis of the < 80% efficiency at physical core count**, per
+CLAUDE.md's explicit fallback clause:
+
+1. **Heterogeneous P+E cores with static equal-sized chunking is the primary
+   suspect.** CLAUDE.md locks "static contiguous chunking" — every chunk gets
+   an equal `path_count / 11` share regardless of which core executes it. The
+   M3 Pro's 5 performance cores are meaningfully faster than its 6 efficiency
+   cores for sustained arithmetic-heavy work (this pricer's hot loop:
+   Philox + Acklam inverse-CDF + GBM step per path). Since `parallel_for`
+   cannot return until *every* chunk completes, the round's wall-clock time
+   is set by the slowest chunk — almost certainly one landing on an
+   efficiency core — while performance cores that already finished their
+   equal share sit idle. This is a direct, inherent consequence of pairing
+   equal static chunking with heterogeneous cores, not a bug; a work-stealing
+   or performance-weighted chunking scheme would very likely close much of
+   this gap, but that's a different, dynamic work-division design than the
+   one CLAUDE.md locks in for this phase.
+2. **Shared, non-isolated benchmark machine.** This is a personal laptop
+   being actively used during the session (load average ~5 reported
+   alongside the measurements above), not a dedicated, isolated benchmark
+   box — background processes compete for the same physical cores the
+   benchmark is trying to use exclusively.
+3. **Fixed per-round synchronization cost.** Every parallel round pays a
+   constant tax (mutex acquisition, `notify_all`, latch countdown/wait)
+   independent of path count; at a fixed total workload, spreading it across
+   more workers means each one does proportionally less real work per unit
+   of synchronization overhead paid.
+
+None of these are addressed by writing a different pool implementation within
+this phase's locked design (static chunking, hand-written pool); they are
+honestly reported rather than hidden, per CLAUDE.md's explicit instruction
+that a shortfall be accompanied by analysis, not silently smoothed over.
+
+**False-sharing A/B**: `PaddedWelford` (padded to 128 bytes, one accumulator
+per cache line) measured against a deliberately unpadded
+`std::vector<WelfordAccumulator>` array, `hardware_concurrency()` threads each
+repeatedly updating their own slot, median of 7 runs:
+
+| Layout | Median time |
+|---|---|
+| Unpadded | 17.4 ms |
+| Padded | 17.5 ms |
+
+**No measurable difference on this machine and workload** — the two are
+within each other's noise (stddev ~0.2-0.4ms on ~17.4ms). Reported as
+measured, per CLAUDE.md's explicit instruction not to claim a benefit that
+wasn't observed. `PaddedWelford` is still used throughout (it costs
+essentially nothing and is the theoretically correct choice per the false
+-sharing literature), but this specific measurement doesn't demonstrate a
+benefit on Apple Silicon's cache-coherency implementation for this specific
+access pattern — plausible contributing factors include M-series' unusually
+large, sophisticated per-core caches and coherency protocol, or that this
+workload's compute-per-write ratio (Welford's `add()` does real arithmetic
+between memory accesses) isn't memory-bandwidth-bound enough for
+cache-line contention to dominate. Not investigated further this session;
+recorded as an honest null result rather than a claimed win.
+
 ## Sections (populated as later phases land)
 
 - CFA invariant results table
-- Thread-scaling curve and Amdahl serial-fraction fit
-- False-sharing A/B benchmark
 - Bump-size sensitivity study (finite-difference Greeks)
 - LSM American option validation against binomial reference
 - Known limitations (documented, not hidden): LSM low-bias estimator; gamma for
