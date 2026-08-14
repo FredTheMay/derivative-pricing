@@ -19,7 +19,7 @@ BinomialResult crr_binomial(double spot, double strike, double rate, double carr
     const auto node_count = static_cast<std::size_t>(steps) + 1;
     std::vector<double> values(node_count);
     for (std::size_t i = 0; i < node_count; ++i) {
-        const double up_moves = static_cast<double>(i);
+        const auto up_moves = static_cast<double>(i);
         const double down_moves = static_cast<double>(steps) - up_moves;
         const double terminal_spot = spot * std::pow(u, up_moves) * std::pow(d, down_moves);
         values[i] = std::max(phi * (terminal_spot - strike), 0.0);

@@ -82,8 +82,7 @@ jobs:
           CXX: clang++-16
         run: cmake --preset debug -G Ninja
 
-      - name: Run clang-tidy on Phase 0 sources
+      - name: Run clang-tidy
         run: |
           clang-tidy-16 -p build/debug \
-            src/core/types.cpp \
-            $(git ls-files 'include/mcd/*.hpp')
+            $(git ls-files 'src/*.cpp' 'include/mcd/*.hpp')

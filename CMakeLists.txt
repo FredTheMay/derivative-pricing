@@ -24,8 +24,11 @@ target_compile_options(mcd_warnings INTERFACE
 add_library(mcd_core
     src/core/types.cpp
     src/core/normal.cpp
+    src/core/rng.cpp
+    src/models/gbm.cpp
     src/pricers/analytic.cpp
     src/pricers/binomial.cpp
+    src/pricers/monte_carlo.cpp
 )
 target_include_directories(mcd_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -59,6 +62,5 @@ if(MCD_ENABLE_BENCHMARKS)
         GIT_TAG v1.9.1
     )
     FetchContent_MakeAvailable(benchmark)
-    # No benchmark targets yet: the scaling/microbenchmark harness begins in
-    # Phase 2. This only proves the FetchContent wiring works end to end.
+    add_subdirectory(bench)
 endif()

@@ -23,7 +23,7 @@ D1D2 bsm_d1d2(double spot, double strike, double rate, double carry_yield, doubl
     const double b = rate - carry_yield;
     const double sqrt_t = std::sqrt(time);
     const double d1 = (std::log(spot / strike) + (b + 0.5 * vol * vol) * time) / (vol * sqrt_t);
-    return {d1, d1 - vol * sqrt_t};
+    return {.d1 = d1, .d2 = d1 - vol * sqrt_t};
 }
 
 } // namespace
