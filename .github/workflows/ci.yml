@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gcc-debug
+            cc: gcc-13
+            cxx: g++-13
+            preset: debug
+          - name: gcc-release
+            cc: gcc-13
+            cxx: g++-13
+            preset: release
+          - name: clang-debug
+            cc: clang-16
+            cxx: clang++-16
+            preset: debug
+          - name: clang-release
+            cc: clang-16
+            cxx: clang++-16
+            preset: release
+          - name: asan
+            cc: clang-16
+            cxx: clang++-16
+            preset: asan
+          - name: ubsan
+            cc: clang-16
+            cxx: clang++-16
+            preset: ubsan
+          - name: tsan
+            cc: clang-16
+            cxx: clang++-16
+            preset: tsan
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build ${{ matrix.cc }} ${{ matrix.cxx }}
+
+      - name: Configure
+        run: >
+          cmake --preset ${{ matrix.preset }}
+          -G Ninja
+          -DMCD_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}
+
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-16 clang-tidy-16
+
+      - name: Configure
+        env:
+          CC: clang-16
+          CXX: clang++-16
+        run: cmake --preset debug -G Ninja
+
+      - name: Run clang-tidy on Phase 0 sources
+        run: |
+          clang-tidy-16 -p build/debug \
+            src/core/types.cpp \
+            $(git ls-files 'include/mcd/*.hpp')

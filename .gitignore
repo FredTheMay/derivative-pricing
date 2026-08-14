@@ -1,0 +1,32 @@
+# Build outputs
+build/
+cmake-build-*/
+out/
+
+# CMake
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+# IDE / editor metadata
+.vscode/
+.idea/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Python (bindings, later phases)
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Node (web frontend, later phases)
+node_modules/
+dist/
+
+# Benchmark / profiling scratch
+*.prof
+perf.data*

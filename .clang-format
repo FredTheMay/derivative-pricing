@@ -1,0 +1,20 @@
+BasedOnStyle: LLVM
+ColumnLimit: 100
+IndentWidth: 4
+AccessModifierOffset: -4
+AlignAfterOpenBracket: Align
+AllowShortFunctionsOnASingleLine: Inline
+BreakBeforeBraces: Attach
+NamespaceIndentation: None
+PointerAlignment: Left
+ReferenceAlignment: Left
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"mcd/'
+    Priority: 1
+  - Regex: '^<gtest/|^<benchmark/'
+    Priority: 2
+  - Regex: '^<'
+    Priority: 3
+Standard: c++20

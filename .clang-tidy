@@ -1,0 +1,19 @@
+---
+# Conservative default per docs/design/00-requirements.md §7.4: broad checks on,
+# with a short, explicit suppression list for rules that fight hand-written
+# low-level numerics code (bit manipulation in the RNG, fixed-size buffers in
+# the streaming path generator). Revisit if this proves too noisy or too loose
+# once Phase 2+ code lands.
+Checks: >
+  bugprone-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  performance-*,
+  -modernize-use-trailing-return-type,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-avoid-non-const-global-variables
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*/include/mcd/.*'
+FormatStyle: file
