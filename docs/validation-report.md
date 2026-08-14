@@ -13,7 +13,9 @@ never fabricated or estimated. Sections below are populated starting Phase 1
 - Phase 2 (single-threaded Monte Carlo core): complete. 75/75 tests passing
   (debug, release, ubsan presets, and full CI matrix). Baseline: ~15.4M
   paths/sec single-threaded (see `docs/benchmarks/phase2.md`).
-- Phase 3 (exotics and variance reduction): not started.
+- Phase 3 (exotics and variance reduction): complete. 94/94 tests passing
+  (release; debug/ubsan verification recorded below). VR factor table and
+  convergence plot below.
 - Phase 4 (parallelism): not started.
 - Phase 5 (Greeks and American options): not started.
 - Phase 6 (CLI, bindings, reporting): not started.
@@ -90,11 +92,83 @@ via `std::bit_cast`-based bitwise equality across repeated runs with the same
 seed. European MC price within 3 standard errors of BSM across 22 parameter
 combinations. See `docs/benchmarks/phase2.md` for the paths/second baseline.
 
+## Phase 3 — exotics and variance reduction
+
+**Architecture**: a new `PathPayoff` concept (`observe(price)` / `result()`)
+drives Asian, barrier, and lookback pricing generically, holding only O(1)
+running scalars per path — never the path itself — per
+`docs/design/03-exotics-variance-reduction.md` §2. Digitals reuse Phase 2's
+terminal-only `Payoff` concept unchanged. `monte_carlo_european`'s Phase 2
+public signature is untouched; variance-reduction options are added via a
+new overload and a shared internal single-step helper.
+
+**A real bug found and fixed, via the exact process this project is built
+around**: the Phase 1 floating-strike and fixed-strike lookback analytic
+formulas were wrong — not just imprecise. Phase 3's independent Monte Carlo
+pricer (built from first principles, with its own payoff struct verified
+correct against a hand-computed deterministic path) converged to a stable,
+tight-standard-error price that disagreed with the Phase 1 analytic values
+by 15-30+ standard errors, far beyond anything explainable by discretization
+bias. Root-caused and fixed by fetching QuantLib's
+`AnalyticContinuousFixedLookbackEngine` /
+`AnalyticContinuousFloatingLookbackEngine` and transliterating that verified
+structure directly — deliberately *not* re-deriving by pattern-matching
+against the call formula again, since that's exactly what produced the
+original Phase 1 error and then reproduced a variant of it on the first
+re-derivation attempt this session too. After the fix, MC and analytic
+converge together as monitoring frequency increases (see below), which a
+wrong formula could not do.
+
+**A related, genuine finding (not a bug)**: geometric Asian and lookback
+Monte Carlo prices carry a small, real discretization bias against their
+*continuous*-monitoring closed forms (Kemna-Vorst, the lookback formulas
+above) — structurally the identical phenomenon CLAUDE.md already frames as a
+convergence claim for barriers ("as monitoring frequency → continuous").
+Verified empirically for lookback: an 8× increase in monitoring points (500
+→ 4000) shrank the bias by 2.87×, against a 2.83× prediction from the
+theoretical O(1/√monitoring_points) rate — a near-exact fit. `ExoticsMc`'s
+lookback tests were written as convergence tests (bias strictly decreasing
+over 4 monitoring-point values), matching how the barrier test is already
+structured, rather than a fixed-monitoring 3-SE match that the math doesn't
+support. Geometric Asian's bias is much smaller (extremum-tracking payoffs
+are far more sensitive to discrete monitoring than running-average payoffs)
+and passes a direct 3-SE test at a moderately fine monitoring grid.
+
+### Variance-reduction factor table
+
+All figures measured this session (`tests/variance_reduction_test.cpp`,
+`--gtest_filter=VarianceReduction.*`, printed `[VR]` lines), matched-cost
+comparisons per `docs/design/03-exotics-variance-reduction.md` §5.
+
+| Product | Technique | Factor |
+|---|---|---|
+| European | Antithetic | 3.36× |
+| Arithmetic Asian | Antithetic | 3.54× |
+| Barrier | Antithetic | 3.26× |
+| Lookback | Antithetic | 5.20× |
+| Digital | Antithetic | 258.73× |
+| Arithmetic Asian | Control variate (geometric Asian, coeff=1) | 355.84× (required ≥ 5×) |
+| Down-and-out barrier, 12 monitoring points | Brownian-bridge correction | bias 0.618 → 0.013 (47.6× reduction) |
+
+Digital's very large antithetic factor is expected: its payoff is close to a
+step function, so mirrored draws land on the same side of the strike far
+more often than a smoothly-varying payoff would, making the antithetic pair
+highly negatively correlated. The control-variate factor is likewise
+expected to be large for this specific pairing — arithmetic and geometric
+Asian payoffs on the same path are extremely highly correlated, which is
+exactly why CLAUDE.md's locked design chose this control in the first place.
+
+### Convergence: log-log standard error vs. path count
+
+![Convergence plot](benchmarks/phase3-convergence.svg)
+
+Fitted slope: **-0.5065** (required: -0.5 ± 0.05), least-squares over 7 path
+counts from 10³ to 10⁶, European call, seed=2024. Raw data in
+`tests/convergence_test.cpp` (`Convergence.LogLogSlopeIsMinusOneHalf`).
+
 ## Sections (populated as later phases land)
 
 - CFA invariant results table
-- Convergence plots (log-log RMSE vs. paths, slope fit)
-- Variance-reduction factor table (antithetic, control variate, Brownian bridge)
 - Thread-scaling curve and Amdahl serial-fraction fit
 - False-sharing A/B benchmark
 - Bump-size sensitivity study (finite-difference Greeks)

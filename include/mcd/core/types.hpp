@@ -14,5 +14,6 @@ enum class BarrierDirection : std::uint8_t { Up, Down };
 enum class BarrierKnock : std::uint8_t { In, Out };
 enum class StrikeStyle : std::uint8_t { Fixed, Floating };
 enum class DigitalStyle : std::uint8_t { CashOrNothing, AssetOrNothing };
+enum class AverageStyle : std::uint8_t { Arithmetic, Geometric };
 
 } // namespace mcd

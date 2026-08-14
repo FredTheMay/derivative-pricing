@@ -5,6 +5,9 @@ add_executable(mcd_tests
     rng_test.cpp
     stats_test.cpp
     monte_carlo_test.cpp
+    exotics_mc_test.cpp
+    variance_reduction_test.cpp
+    convergence_test.cpp
 )
 
 target_link_libraries(mcd_tests PRIVATE

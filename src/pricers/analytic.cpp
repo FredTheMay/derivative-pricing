@@ -8,8 +8,6 @@ namespace mcd::pricers {
 
 namespace {
 
-constexpr double kCostOfCarryEpsilon = 1e-12;
-
 double sign(OptionType type) noexcept { return type == OptionType::Call ? 1.0 : -1.0; }
 
 struct D1D2 {
@@ -132,79 +130,84 @@ double reiner_rubinstein(double spot, double strike, double barrier, double rate
     return strike_above_barrier ? (B - D + F) : (A - C + F);
 }
 
+namespace {
+
+// Continuous fixed/floating lookback pricers below are a direct, deliberately
+// literal transliteration of QuantLib's AnalyticContinuousFixedLookbackEngine
+// and AnalyticContinuousFloatingLookbackEngine (own implementation from the
+// published algorithm, fetched and verified against that reference this
+// session -- see docs/design/03-exotics-variance-reduction.md). An earlier,
+// hand-derived version of these two functions had real sign errors that a
+// from-scratch re-derivation kept reproducing; transliterating a verified
+// source structurally, rather than re-deriving by pattern-matching against
+// the call formula, is the fix.
+
+struct LookbackCoreTerms {
+    double lambda;
+    double d1;
+    double std_dev;
+};
+
+LookbackCoreTerms lookback_core(double spot, double reference, double rate, double carry_yield,
+                                 double vol, double time) noexcept {
+    const double lambda = 2.0 * (rate - carry_yield) / (vol * vol);
+    const double std_dev = vol * std::sqrt(time);
+    const double d1 =
+        std::log(spot / reference) / std_dev + 0.5 * (lambda + 1.0) * std_dev;
+    return {.lambda = lambda, .d1 = d1, .std_dev = std_dev};
+}
+
+// Fixed-strike lookback "A"/"B" term (same formula; reference is the running
+// extremum for A, the strike for B).
+double lookback_fixed_AB(double spot, double reference, double rate, double carry_yield,
+                          double vol, double time, double eta) noexcept {
+    const auto [lambda, d1, std_dev] = lookback_core(spot, reference, rate, carry_yield, vol, time);
+    const double n1 = standard_normal_cdf(eta * d1);
+    const double n2 = standard_normal_cdf(eta * (d1 - std_dev));
+    const double n3 = standard_normal_cdf(eta * (d1 - lambda * std_dev));
+    const double n4 = standard_normal_cdf(eta * d1);
+    const double pow_ratio = std::pow(spot / reference, -lambda);
+    const double df_carry = std::exp(-carry_yield * time);
+    const double df_rate = std::exp(-rate * time);
+    return eta * (spot * df_carry * n1 - reference * df_rate * n2 -
+                  spot * df_rate * (pow_ratio * n3 - df_carry * n4 / df_rate) / lambda);
+}
+
+double lookback_fixed_C(double extremum, double strike, double rate, double time,
+                         double eta) noexcept {
+    return eta * std::exp(-rate * time) * (extremum - strike);
+}
+
+} // namespace
+
 double lookback_fixed_strike(double spot, double strike, double rate, double carry_yield,
                               double vol, double time, OptionType type) noexcept {
-    const double b = rate - carry_yield;
-    const double sqrt_t = std::sqrt(time);
-    const double df_rate = std::exp(-rate * time);
-    const double df_carry = std::exp((b - rate) * time);
-
-    if (type == OptionType::Call) {
-        if (strike < spot) {
-            // Running max already exceeds K: guaranteed (S-K) plus a lookback struck at S.
-            return (spot - strike) * df_rate +
-                   lookback_fixed_strike(spot, spot, rate, carry_yield, vol, time, type);
-        }
-        const double d1 = (std::log(spot / strike) + (b + 0.5 * vol * vol) * time) / (vol * sqrt_t);
-        const double term = std::abs(b) < kCostOfCarryEpsilon
-                                 ? spot * df_rate * vol * sqrt_t *
-                                       (standard_normal_pdf(d1) + d1 * standard_normal_cdf(d1))
-                                 : spot * df_rate * (vol * vol / (2.0 * b)) *
-                                       (-std::pow(spot / strike, -2.0 * b / (vol * vol)) *
-                                            standard_normal_cdf(d1 - 2.0 * b * sqrt_t / vol) +
-                                        std::exp(b * time) * standard_normal_cdf(d1));
-        return spot * df_carry * standard_normal_cdf(d1) -
-               strike * df_rate * standard_normal_cdf(d1 - vol * sqrt_t) + term;
+    const double extremum = spot; // pricing at inception: no monitoring history yet
+    const double eta = type == OptionType::Call ? 1.0 : -1.0;
+    const bool guaranteed_branch =
+        type == OptionType::Call ? strike <= extremum : strike >= extremum;
+    if (guaranteed_branch) {
+        return lookback_fixed_AB(spot, extremum, rate, carry_yield, vol, time, eta) +
+               lookback_fixed_C(extremum, strike, rate, time, eta);
     }
-
-    if (strike > spot) {
-        return (strike - spot) * df_rate +
-               lookback_fixed_strike(spot, spot, rate, carry_yield, vol, time, type);
-    }
-    const double e1 =
-        (std::log(spot / strike) + (-b + 0.5 * vol * vol) * time) / (vol * sqrt_t);
-    const double e2 = e1 - vol * sqrt_t;
-    const double term = std::abs(b) < kCostOfCarryEpsilon
-                             ? spot * df_rate * vol * sqrt_t *
-                                   (standard_normal_pdf(e1) + e1 * standard_normal_cdf(-e1))
-                             : spot * df_rate * (vol * vol / (2.0 * b)) *
-                                   (std::pow(spot / strike, -2.0 * b / (vol * vol)) *
-                                        standard_normal_cdf(-e1 + 2.0 * b * sqrt_t / vol) -
-                                    std::exp(b * time) * standard_normal_cdf(-e1));
-    return strike * df_rate * standard_normal_cdf(-e2) -
-           spot * df_carry * standard_normal_cdf(-e1) + term;
+    return lookback_fixed_AB(spot, strike, rate, carry_yield, vol, time, eta);
 }
 
 double lookback_floating_strike(double spot, double rate, double carry_yield, double vol,
                                  double time, OptionType type) noexcept {
-    const double b = rate - carry_yield;
-    const double sqrt_t = std::sqrt(time);
+    const double extremum = spot; // pricing at inception: no monitoring history yet
+    const double eta = type == OptionType::Call ? 1.0 : -1.0;
+    const auto [lambda, d1, std_dev] =
+        lookback_core(spot, extremum, rate, carry_yield, vol, time);
+    const double n1 = standard_normal_cdf(eta * d1);
+    const double n2 = standard_normal_cdf(eta * (d1 - std_dev));
+    const double n3 = standard_normal_cdf(eta * (-d1 + lambda * std_dev));
+    const double n4 = standard_normal_cdf(eta * -d1);
+    const double pow_ratio = std::pow(spot / extremum, -lambda);
+    const double df_carry = std::exp(-carry_yield * time);
     const double df_rate = std::exp(-rate * time);
-    const double df_carry = std::exp((b - rate) * time);
-
-    if (type == OptionType::Call) {
-        const double a1 = ((b + 0.5 * vol * vol) * time) / (vol * sqrt_t);
-        const double a2 = a1 - vol * sqrt_t;
-        const double term = std::abs(b) < kCostOfCarryEpsilon
-                                 ? spot * df_rate * vol * sqrt_t *
-                                       (standard_normal_pdf(a1) + a1 * standard_normal_cdf(a1))
-                                 : spot * df_rate * (vol * vol / (2.0 * b)) *
-                                       (std::exp(b * time) * standard_normal_cdf(a1) -
-                                        standard_normal_cdf(a1 - 2.0 * b * sqrt_t / vol));
-        return spot * df_carry * standard_normal_cdf(a1) - spot * df_rate * standard_normal_cdf(a2) +
-               term;
-    }
-
-    const double a1 = ((-b + 0.5 * vol * vol) * time) / (vol * sqrt_t);
-    const double a2 = a1 - vol * sqrt_t;
-    const double term = std::abs(b) < kCostOfCarryEpsilon
-                             ? spot * df_rate * vol * sqrt_t *
-                                   (standard_normal_pdf(a1) + a1 * standard_normal_cdf(-a1))
-                             : spot * df_rate * (vol * vol / (2.0 * b)) *
-                                   (standard_normal_cdf(-a1 + 2.0 * b * sqrt_t / vol) -
-                                    std::exp(b * time) * standard_normal_cdf(-a1));
-    return spot * df_rate * standard_normal_cdf(-a2) - spot * df_carry * standard_normal_cdf(-a1) +
-           term;
+    return eta * ((spot * df_carry * n1 - extremum * df_rate * n2) +
+                  spot * df_rate * (pow_ratio * n3 - df_carry * n4 / df_rate) / lambda);
 }
 
 double digital(double spot, double strike, double rate, double carry_yield, double vol,
