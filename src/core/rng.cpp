@@ -19,7 +19,8 @@ struct HiLo {
 
 HiLo mul_hi_lo(std::uint32_t a, std::uint32_t b) noexcept {
     const std::uint64_t product = static_cast<std::uint64_t>(a) * static_cast<std::uint64_t>(b);
-    return {static_cast<std::uint32_t>(product >> 32), static_cast<std::uint32_t>(product)};
+    return {.hi = static_cast<std::uint32_t>(product >> 32),
+            .lo = static_cast<std::uint32_t>(product)};
 }
 
 PhiloxCounter philox_round(PhiloxCounter ctr, PhiloxKey key) noexcept {

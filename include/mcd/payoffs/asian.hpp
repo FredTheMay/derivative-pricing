@@ -12,9 +12,9 @@ namespace mcd::payoffs {
 // monitored dates only (not t=0); see docs/design/03-exotics-variance-
 // reduction.md sec.2 for the convention.
 struct ArithmeticAsianPayoff {
-    double strike;
-    OptionType type;
-    StrikeStyle style;
+    double strike = 0.0;
+    OptionType type = OptionType::Call;
+    StrikeStyle style = StrikeStyle::Fixed;
 
     double sum = 0.0;
     double last_price = 0.0;
@@ -41,9 +41,9 @@ static_assert(PathPayoff<ArithmeticAsianPayoff>);
 // control variate for arithmetic Asian (its analytic price is Phase 1's
 // kemna_vorst).
 struct GeometricAsianPayoff {
-    double strike;
-    OptionType type;
-    StrikeStyle style;
+    double strike = 0.0;
+    OptionType type = OptionType::Call;
+    StrikeStyle style = StrikeStyle::Fixed;
 
     double log_sum = 0.0;
     double last_price = 0.0;

@@ -8,7 +8,12 @@
 # expr;` (it's meant for genuinely uninitialized declarations); and
 # bugprone-easily-swappable-parameters, which flags essentially every pricer
 # signature in this codebase (S, K, r, q, sigma, T is the universal quant
-# finance parameter order, not an accident risk worth a warning here).
+# finance parameter order, not an accident risk worth a warning here). One
+# more added in Phase 4: cppcoreguidelines-pro-bounds-constant-array-index
+# flags per_chunk[chunk_index] in the parallel accumulation engine
+# (monte_carlo.cpp) -- indices are always < logical_chunk_count() <=
+# kMaxLogicalChunks by construction, and .at()'s exception-handling overhead
+# has no place in that hot loop.
 Checks: >
   bugprone-*,
   cppcoreguidelines-*,
@@ -20,7 +25,8 @@ Checks: >
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -cppcoreguidelines-avoid-non-const-global-variables,
   -cppcoreguidelines-init-variables,
-  -bugprone-easily-swappable-parameters
+  -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-pro-bounds-constant-array-index
 WarningsAsErrors: ''
 HeaderFilterRegex: '.*/include/mcd/.*'
 FormatStyle: file

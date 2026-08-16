@@ -84,5 +84,13 @@ jobs:
 
       - name: Run clang-tidy
         run: |
-          clang-tidy-16 -p build/debug \
-            $(git ls-files 'src/*.cpp' 'include/mcd/*.hpp')
+          # Only .cpp files are listed: they're the only ones with real entries in
+          # compile_commands.json (correct -I flags etc.). Headers are NOT passed
+          # directly -- clang-tidy has no compile command for a header analyzed
+          # standalone and silently falls back to a flagless invocation, which
+          # can't find our own include/ directory ('mcd/core/types.hpp' file not
+          # found). Every header here is transitively included by some .cpp file,
+          # so HeaderFilterRegex in .clang-tidy (matching include/mcd/.*) still
+          # surfaces header-only findings -- using the correct flags, since they
+          # come from the .cpp file's real compile command.
+          clang-tidy-16 -p build/debug $(git ls-files 'src/*.cpp')

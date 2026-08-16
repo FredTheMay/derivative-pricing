@@ -3,6 +3,7 @@
 #include "mcd/core/normal.hpp"
 
 #include <cmath>
+#include <numbers>
 
 namespace mcd::pricers {
 
@@ -51,7 +52,7 @@ double kemna_vorst(double spot, double strike, double rate, double carry_yield, 
                     double time, OptionType type) noexcept {
     // Continuous geometric average of GBM is lognormal with adjusted vol sigma/sqrt(3)
     // and adjusted cost of carry b_g = 0.5*(r - q - sigma^2/6); price via BSM with those.
-    const double sigma_g = vol / std::sqrt(3.0);
+    const double sigma_g = vol / std::numbers::sqrt3;
     const double b_g = 0.5 * (rate - carry_yield - vol * vol / 6.0);
     const double q_eff = rate - b_g;
     return black_scholes_merton(spot, strike, rate, q_eff, sigma_g, time, type);

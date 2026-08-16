@@ -13,8 +13,8 @@ concept Payoff = requires(const P& p, double terminal_spot) {
 };
 
 struct EuropeanPayoff {
-    double strike;
-    OptionType type;
+    double strike = 0.0;
+    OptionType type = OptionType::Call;
 
     [[nodiscard]] double operator()(double terminal_spot) const noexcept {
         const double phi = type == OptionType::Call ? 1.0 : -1.0;

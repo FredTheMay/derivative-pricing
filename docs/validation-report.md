@@ -265,6 +265,28 @@ matrix exists to close: a defect invisible to every local configuration this
 project could exercise for three phases, caught the moment the real CI
 environment linked a sanitizer runtime for the first time.
 
+**A third real bug, also caught only by CI**: the `clang-tidy` job failed too,
+for a reason that had likely been silently true since Phase 1. The CI step
+passed header files (`include/mcd/*.hpp`) directly on clang-tidy's command
+line alongside `.cpp` files. Header files have no entry of their own in
+`compile_commands.json` — only actual compiled translation units do — so when
+clang-tidy analyzes one standalone, it has no real compile command to infer
+flags from, and falls back to a flagless invocation that can't find this
+project's own `include/` directory (`'mcd/core/types.hpp' file not found`).
+Fixed the standard, correct way: pass only `.cpp` files (which do have real
+compile commands) and rely on `.clang-tidy`'s existing `HeaderFilterRegex` to
+still surface findings in any header transitively included by one — every
+header in this project is reachable that way, so nothing is lost. Verified
+locally with a properly toolchain-matched clang-tidy run: zero compiler
+errors, only warnings, two of which were legitimate and fixed directly
+(`std::numbers::sqrt3` instead of a manual `sqrt(3.0)` formula in
+`kemna_vorst`; a designated initializer for the `HiLo` struct in the Philox
+implementation), plus one more suppression added to `.clang-tidy`
+(`cppcoreguidelines-pro-bounds-constant-array-index`, for the same
+deliberate, verified-safe hot-path array indexing rationale as Phase 0's
+existing pointer-arithmetic suppression) for a pattern introduced by Phase
+4's parallel accumulation engine.
+
 ### Thread-scaling and false-sharing
 
 ![Scaling chart](benchmarks/phase4-scaling.svg)

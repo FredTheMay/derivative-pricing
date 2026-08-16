@@ -12,12 +12,12 @@ namespace mcd::payoffs {
 // reduction.md sec.7 item 1), discounted once alongside the vanilla payoff
 // by the caller.
 struct BarrierPayoff {
-    double strike;
-    double barrier;
-    double rebate;
-    OptionType type;
-    BarrierDirection direction;
-    BarrierKnock knock;
+    double strike = 0.0;
+    double barrier = 0.0;
+    double rebate = 0.0;
+    OptionType type = OptionType::Call;
+    BarrierDirection direction = BarrierDirection::Down;
+    BarrierKnock knock = BarrierKnock::Out;
 
     bool breached = false;
     double last_price = 0.0;

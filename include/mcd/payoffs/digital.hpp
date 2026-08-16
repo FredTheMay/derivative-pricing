@@ -8,9 +8,9 @@ namespace mcd::payoffs {
 // Digital / binary option. Terminal-spot only, so it uses the simple Payoff
 // concept (european.hpp), not PathPayoff.
 struct DigitalPayoff {
-    double strike;
-    OptionType type;
-    DigitalStyle style;
+    double strike = 0.0;
+    OptionType type = OptionType::Call;
+    DigitalStyle style = DigitalStyle::CashOrNothing;
     double cash_amount = 1.0;
 
     [[nodiscard]] double operator()(double terminal_spot) const noexcept {
