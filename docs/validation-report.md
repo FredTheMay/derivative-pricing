@@ -227,14 +227,43 @@ standard library value at all, sidestepping the instability entirely rather
 than picking a side. Both findings are documented in code comments at their
 respective sites (`thread_pool.hpp`, `stats.hpp`).
 
-**Local sanitizer coverage**: ASan and TSan still cannot run on this specific
-Mac for reasons unrelated to this project's code (documented in
-`docs/design/00-requirements.md` §6a since Phase 0 — Apple-clang/macOS
-sanitizer runtime issue). UBSan ran clean locally, including every new
-concurrency test, under both the Clang-22 and GCC-16 toolchains. TSan
-correctness — the sharpest test of the new concurrent code — is verified via
-CI's Linux matrix, exactly why CLAUDE.md put it there rather than relying on
-local runs.
+**Local sanitizer coverage**: UBSan ran clean locally, including every new
+concurrency test, under both the Clang-22 and GCC-16 toolchains. ASan was
+previously blocked on this Mac under Apple clang (documented in
+`docs/design/00-requirements.md` §6a since Phase 0); discovered during this
+phase that Homebrew GCC 16's ASan runtime does not have that problem on the
+same machine, giving real local ASan coverage for the first time — **108/109
+tests pass, 1 correctly skipped, zero memory errors detected** (see the CI
+push-back finding immediately below for what that one skip is and why).
+GCC on macOS ARM64 has no working TSan runtime at all (a missing
+`___tsan_init` symbol at link time — a genuine platform gap, not a bug), so
+TSan correctness remains CI-only, exactly why CLAUDE.md put it there.
+
+**A second real bug, caught only by actually pushing to CI** — worth stating
+plainly: this one slipped past every local check this whole project, because
+the specific failure mode (ASan/TSan's own runtime already defining
+`operator new`/`operator delete`) can only manifest when a sanitizer
+runtime is actually present at link time, and no sanitizer had linked
+successfully on this Mac before this phase. Phase 2's
+`ZeroHeapAllocationsInPricingLoop` test overrides global `operator new`/
+`delete` to count allocations — a technique that is fundamentally
+incompatible with ASan/TSan, whose runtimes (`libclang_rt.{asan,tsan}_cxx.a`)
+already define those exact symbols for their own instrumentation. Linking
+both is a hard "multiple definition" error, not a warning. CI's tsan job
+failed on exactly this; asan failed identically for the same reason. Fixed
+with a sanitizer-detection preprocessor guard
+(`__SANITIZE_ADDRESS__`/`__SANITIZE_THREAD__`/`__has_feature`) that skips —
+visibly, as `SKIPPED` in test output, with the reason stated, never silently
+— only that one test's allocator-override mechanism under those two
+sanitizers; debug, release, and ubsan all still run the real check. Verified
+by building under GCC 16's ASan locally: links cleanly, the test reports
+`SKIPPED` with its reason as designed, and the rest of the suite (108 tests)
+passes with zero memory errors detected.
+
+This is a direct, concrete illustration of exactly the gap CLAUDE.md's CI
+matrix exists to close: a defect invisible to every local configuration this
+project could exercise for three phases, caught the moment the real CI
+environment linked a sanitizer runtime for the first time.
 
 ### Thread-scaling and false-sharing
 

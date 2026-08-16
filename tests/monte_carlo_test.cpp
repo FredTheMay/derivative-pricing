@@ -85,7 +85,28 @@ TEST(MonteCarloEuropean, DifferentSeedsGiveDifferentPrices) {
 }
 
 // --- Zero heap allocation in the pricing loop ----------------------------------------
+//
+// Overriding global operator new/delete to count allocations is fundamentally
+// incompatible with ASan/TSan: their runtimes (libclang_rt.{asan,tsan}_cxx.a) already
+// define these same symbols for their own instrumentation, and linking both is a hard
+// "multiple definition" error, not a warning -- confirmed for real in CI, where this
+// exact conflict failed the tsan (and, by the identical mechanism, asan) build. There
+// is no allocator-override technique that coexists with a sanitizer that itself
+// intercepts the allocator. Skipped (not silently omitted -- reported as SKIPPED, with
+// the reason, in every sanitizer build's test output) under those two configurations
+// only; debug, release, and ubsan all still run the real check.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define MCD_SKIP_ALLOCATOR_OVERRIDE 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#define MCD_SKIP_ALLOCATOR_OVERRIDE 1
+#endif
+#endif
+#ifndef MCD_SKIP_ALLOCATOR_OVERRIDE
+#define MCD_SKIP_ALLOCATOR_OVERRIDE 0
+#endif
 
+#if !MCD_SKIP_ALLOCATOR_OVERRIDE
 namespace {
 std::atomic<std::uint64_t> g_new_count{0};
 } // namespace
@@ -100,8 +121,14 @@ void* operator new(std::size_t size) {
 
 void operator delete(void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
+#endif // !MCD_SKIP_ALLOCATOR_OVERRIDE
 
 TEST(MonteCarloEuropean, ZeroHeapAllocationsInPricingLoop) {
+#if MCD_SKIP_ALLOCATOR_OVERRIDE
+    GTEST_SKIP() << "operator new/delete override is incompatible with the sanitizer "
+                    "runtime's own allocator interception (see comment above); zero-"
+                    "allocation is verified under debug/release/ubsan instead.";
+#else
     // Warm up anything GoogleTest itself might lazily allocate before we start counting.
     (void)pricers::monte_carlo_european(100.0, 100.0, 0.05, 0.0, 0.2, 1.0, OptionType::Call, 10,
                                          1);
@@ -115,4 +142,5 @@ TEST(MonteCarloEuropean, ZeroHeapAllocationsInPricingLoop) {
     EXPECT_EQ(before, after) << "operator new was called " << (after - before)
                               << " times during 1e6-path pricing";
     EXPECT_GT(result.path_count, 0u);
+#endif // MCD_SKIP_ALLOCATOR_OVERRIDE
 }

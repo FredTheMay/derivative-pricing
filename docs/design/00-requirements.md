@@ -149,22 +149,28 @@ those presets test correctness, not throughput — skipping the fetch there is
 correct on its own merits, not just a workaround. GoogleTest is unaffected and
 still fetched under every preset.
 
-A second, unresolved local-machine limitation: on this development Mac
-(Apple clang 17, macOS 26.5.2, Apple Silicon), the `asan` preset's binary
-hangs indefinitely inside the AddressSanitizer runtime at
-`FindDynamicShadowStart` — before any user code runs — and the `tsan` preset's
-binary segfaults at startup for the same class of reason (ThreadSanitizer
-runtime shadow-memory setup). Both presets **configure and build cleanly**
+A second local-machine limitation, since partially resolved: with **Apple
+clang** (17, macOS 26.5.2, Apple Silicon), the `asan` preset's binary hangs
+indefinitely inside the AddressSanitizer runtime at `FindDynamicShadowStart`
+— before any user code runs — and the `tsan` preset's binary segfaults at
+startup for the same class of reason (ThreadSanitizer runtime shadow-memory
+setup). Both presets **configure and build cleanly** with Apple clang
 (compiler and linker accept the sanitizer flags without error); only runtime
-*execution* of the resulting binary is affected, and only on this local
-machine/OS combination. This matches a known class of Apple-clang sanitizer
-runtime issues on recent macOS/Apple Silicon and is not something this
-project's code or CMake configuration can fix. The `ubsan` preset is
-unaffected — it builds and runs cleanly locally, tests passing. Authoritative
-verification of `asan` and `tsan` at runtime is deferred to the Linux CI
-matrix (GCC 13 / Clang 16 on `ubuntu-24.04`), which is precisely why
-CLAUDE.md's CI matrix requires them as separate jobs rather than relying on
-local developer runs.
+*execution* of the resulting binary is affected. This matches a known class
+of Apple-clang sanitizer runtime issues on recent macOS/Apple Silicon.
+
+Discovered during Phase 4: **Homebrew GCC 16's** AddressSanitizer runtime does
+not have this problem on the same machine — `asan` builds, links, and runs
+correctly under GCC 16, giving real local ASan verification for the first
+time (used starting Phase 4; see `docs/validation-report.md`). GCC on macOS
+ARM64 does not ship a working ThreadSanitizer runtime at all, though (a
+missing `___tsan_init` symbol at link time) — this is a genuine platform gap,
+not a bug, so `tsan` specifically remains CI-only regardless of toolchain.
+The `ubsan` preset is unaffected under either toolchain — it builds and runs
+cleanly, tests passing. Authoritative verification of `tsan`, and a second
+opinion on `asan`, are still deferred to the Linux CI matrix (GCC 13 / Clang
+16 on `ubuntu-24.04`), which is precisely why CLAUDE.md's CI matrix requires
+them as separate jobs rather than relying on local developer runs.
 
 ## 7. Open questions — resolved / remaining
 
