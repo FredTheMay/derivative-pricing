@@ -65,6 +65,33 @@ jobs:
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
 
+  python-bindings:
+    name: python-bindings
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-13
+
+      - name: pip install -e . (CLAUDE.md sec.6 Phase 6 gate criterion)
+        env:
+          CC: gcc-13
+          CXX: g++-13
+        run: pip install -e .
+
+      - name: Python smoke test (prices every product; GIL-release check)
+        run: python -m unittest bindings.python.tests.test_smoke -v
+
+      - name: Report generator regenerates from scratch (CLAUDE.md sec.6 Phase 6 gate criterion)
+        run: python tools/generate_report.py
+
   clang-tidy:
     name: clang-tidy
     runs-on: ubuntu-24.04
