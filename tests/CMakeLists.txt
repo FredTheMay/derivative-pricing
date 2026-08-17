@@ -9,6 +9,9 @@ add_executable(mcd_tests
     variance_reduction_test.cpp
     convergence_test.cpp
     parallelism_test.cpp
+    linalg_test.cpp
+    greeks_test.cpp
+    lsm_test.cpp
 )
 
 target_link_libraries(mcd_tests PRIVATE

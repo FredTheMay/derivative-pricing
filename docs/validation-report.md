@@ -20,7 +20,12 @@ never fabricated or estimated. Sections below are populated starting Phase 1
   ubsan; tsan via CI). Bitwise determinism verified across thread counts
   1/2/4/8/hardware_concurrency() for every product. Scaling and false-sharing
   results below.
-- Phase 5 (Greeks and American options): not started.
+- Phase 5 (Greeks and American options): complete. 129/129 tests passing
+  (debug, release, ubsan presets, all locally verified this phase). A real
+  LSM bug (missing inception-time exercise decision) found by CLAUDE.md's own
+  required "American put ≥ immediate exercise value" test and fixed. Bump-size
+  study, QR standalone verification, and frozen-vs-naive Greeks quantification
+  below.
 - Phase 6 (CLI, bindings, reporting): not started.
 - Phase 7 (AWS demo): not started.
 
@@ -368,10 +373,168 @@ between memory accesses) isn't memory-bandwidth-bound enough for
 cache-line contention to dominate. Not investigated further this session;
 recorded as an honest null result rather than a claimed win.
 
+## Phase 5 — Greeks and American options
+
+**Householder QR least squares, tested standalone before LSM used it at all**
+(`tests/linalg_test.cpp`): a known-answer overdetermined system
+(3 points, hand-solved regression, β = [2/3, 1/2]) and an exactly-determined
+3×3 system (hand-solved via elimination, β = [6, 15, -23]) both reproduced to
+1e-9. Agreement with a normal-equations solver (formed explicitly,
+test-only) on a well-conditioned Vandermonde system, and — the actual point
+of choosing Householder over the normal equations per CLAUDE.md §5 —
+**measured**, not asserted, superior accuracy on an ill-conditioned cubic
+Vandermonde system built from four x-values clustered within 0.03% of each
+other (recovering a known β = [2, -3, 5, -1] from noiseless data): Householder
+QR's total coefficient error was smaller than the normal-equations solver's on
+the same data (both computed from the identical `A`, `y`; the normal-equations
+path explicitly forms AᵀA before solving, the QR path never does). All four
+tests pass.
+
+**Bump-size sweep — real data, not the textbook exponent assumed**
+(`docs/benchmarks/phase5-bump-size-sweep.svg`; S=K=100, r=0.05, q=0, σ=0.20,
+T=1, European call, N=200,000 paths, seed=777, h swept over
+h/S ∈ [1e-6, 1] — seven orders of magnitude): delta's error stays flat around
+6×10⁻⁴ across the entire measured range and only degrades once h/S exceeds
+≈3×10⁻², so delta is not the binding constraint. Gamma's error is
+catastrophic below h/S ≈ 1×10⁻⁴ (MC-noise regime — dividing a fixed-noise
+difference by a shrinking h²), falls to a broad low-error plateau over
+roughly h/S ∈ [3×10⁻³, 1×10⁻¹] (measured minimum 2.05×10⁻⁶ at
+h/S = 3.16×10⁻³), then rises again past h/S ≈ 3×10⁻¹ (truncation regime,
+error ~ h²) — exactly the two-regime shape with an interior optimum CLAUDE.md
+§6 Phase 5 describes, confirmed by measurement rather than assumed. Default
+`spot`/`vol`/`time` bump fraction set to 1% — inside the measured plateau, not
+at the single-seed measured minimum (chosen deliberately: the minimum is
+itself noisy, being measured off one fixed seed, and 1% is the standard,
+seed-independent literature default). `rate`'s bump is a fixed 100bp absolute
+(not independently swept — relative bumps are undefined at r near 0). Only
+the spot/gamma trade-off was directly measured; vol/time reuse the same
+relative-fraction reasoning since they share the same truncation-vs-noise
+shape, per `docs/design/05-greeks-and-american.md` §2.3's stated scope.
+
+**Common random numbers**: verified directly, not just inferred from smooth
+Greeks — `CommonRandomNumbers.ZDrawIsIndependentOfScenarioParameters` asserts
+bit-identical `standard_normal_variate` draws via `std::bit_cast<uint64_t>`.
+This holds by construction (the RNG counter is keyed on `(seed, path_index,
+draw_index)` only), but is asserted explicitly per CLAUDE.md §6 Phase 5's
+requirement, not left implicit.
+
+**FD Greeks vs. BSM analytic, four parameter combinations, all within 3 SE**
+(`tests/greeks_test.cpp`, `ParameterMatrix/FiniteDifferenceGreeksVsAnalytic`,
+N=300,000 paths): the analytic oracle is a tight (h/S ≈ 1e-5) deterministic
+central difference on the already-validated (Phase 1) closed form, not a new
+formula. Since `EuropeanGreeks` doesn't carry a per-Greek standard error, the
+"3 SE" tolerance is a bound reconstructed in the test from the underlying
+`McResult::standard_error` of each bumped call, propagated through the
+central-difference formula **assuming independence between bumped scenarios**
+— which CRN deliberately violates (the whole point of CRN is that bumped
+scenarios are strongly *correlated*, hence lower true variance in the
+difference). This makes the bound conservative (loose, not tight) in a known
+direction, documented in `tests/greeks_test.cpp` rather than presented as an
+exact confidence interval.
+
+**A real bug found and fixed by CLAUDE.md's own required test**: `American
+put >= immediate exercise value everywhere` (§6 Phase 5) initially failed for
+a deep in-the-money put (S=60, K=100 — immediate exercise value 40) by far
+more than 3 standard errors, and — the tell that this was a real bug and not
+Monte Carlo noise — **the gap did not shrink as path count grew**: 0.51 at
+N=50,000, 0.50 at N=200,000, 0.50 at N=800,000 (monitoring_points=10); it only
+shrank as monitoring frequency increased (0.51 → 0.10 → 0.026 across
+monitoring_points ∈ {10, 50, 200}), the signature of a discretization/
+decision-timing bias, not sampling error. Root cause: the backward-induction
+loop only ever compares exercise against continuation at monitoring dates
+t = dt, 2dt, ..., T — it never considers exercising *at t=0 itself*, even
+though that choice is always available and, for a deep ITM put, is close to
+strictly better than waiting even one small dt. Unlike every other exercise
+date, the t=0 decision is a single deterministic scalar comparison (spot at
+t=0 is one number shared by every path, not a distribution), so it needed no
+regression — just `price = max(intrinsic(spot), regression-based continuation
+estimate)`, with `standard_error = 0` exactly when the intrinsic value wins,
+since that decision carries no sampling noise. Fixed in both
+`monte_carlo_lsm_american` and `reprice_against_frozen_policy` (the latter
+replaying the *frozen* base-run decision rather than re-deciding, consistent
+with every other frozen exercise date); `LsmPolicy` gained an
+`exercise_at_inception` field to carry it. Re-verified: the deep-ITM gap is
+now exactly 0.0 (not merely within tolerance) at every monitoring
+frequency/path-count combination tested, since the corrected decision is
+deterministic once it triggers.
+
+**LSM vs. a fine (4,000-step) American binomial tree, six parameter
+combinations spanning both option types, dividend and non-dividend cases,
+within 3 SE** (`tests/lsm_test.cpp`, `ParameterMatrix/LsmVsBinomial`,
+N=100,000 paths, 50 monitoring points, degree-3 Laguerre basis) — an
+independently-computed reference (tree, not regression) per CLAUDE.md §2.5.
+**American call equals European call on a non-dividend-paying underlying**
+(`Lsm.AmericanCallEqualsEuropeanCallWithoutDividends`) — the sharpest
+available correctness check, since early exercise being suboptimal is a
+sharp theoretical fact, not a loose bound. **American put ≥ European put**
+and **≥ immediate exercise value everywhere** (both, now exactly, per the bug
+fix above) also verified. **Convergence in path count**
+(`Lsm.ConvergesAsPathCountIncreases`): standard error and the deviation from
+the binomial reference both shrink monotonically as N grows from 10,000 to
+160,000 (SE: 0.093 → 0.046 → 0.023; |price − binomial|: 0.079 → 0.054 →
+0.022).
+
+**Simplification disclosed**: the Laguerre basis is implemented as a fixed,
+non-templated degree-3 function in `src/pricers/lsm.cpp`, not exposed as a
+pluggable template parameter on the public API as
+`docs/design/05-greeks-and-american.md` §3.2 originally described. Convergence
+in *basis degree* specifically (as opposed to path count) was not measured
+this phase as a result — the internal implementation would need to become
+template-parameterized first. Flagged here rather than silently narrowing
+scope; degree-3 Laguerre is still the field-standard default from the
+original Longstaff-Schwartz paper, so this does not affect correctness, only
+the pluggability CLAUDE.md's design intent described.
+
+**Frozen exercise boundary for American Greeks — quantified against naive
+full-refit, per CLAUDE.md §6 Phase 5's "quantify the improvement"
+requirement**: an American put delta (S=K=100, r=0.05, q=0, σ=0.25, T=1,
+20 monitoring points) was estimated 40 independent times (independent seeds)
+two ways — reusing a frozen base-run policy for the ± bumped repricing
+(`reprice_against_frozen_policy`) versus refitting the LSM regression from
+scratch at each bumped spot (`monte_carlo_lsm_american`) — and the standard
+deviation of the resulting delta estimate across those 40 trials was compared,
+swept over path count and bump size:
+
+| path count | h    | frozen σ(delta) | naive-refit σ(delta) | naive/frozen |
+|-----------:|-----:|-----------------:|----------------------:|--------------:|
+| 2,000      | 0.05 | 0.1585            | 0.3222                 | **2.03×**      |
+| 2,000      | 0.10 | 0.0985            | 0.1209                 | **1.23×**      |
+| 5,000      | 0.05 | 0.0644            | 0.1639                 | **2.54×**      |
+| 5,000      | 0.10 | 0.0583            | 0.0785                 | **1.35×**      |
+| 5,000      | 0.25 | 0.0365            | 0.0427                 | 1.17×          |
+| 5,000      | 0.50 | 0.0277            | 0.0287                 | 1.04×          |
+| 20,000     | 0.05 | 0.0396            | 0.0487                 | 1.23×          |
+| 20,000     | 0.10 | 0.0251            | 0.0384                 | 1.53×          |
+| 20,000     | 0.25 | 0.0174            | 0.0173                 | 0.99×          |
+| 20,000     | 0.50 | 0.0129            | 0.0117                 | 0.91×          |
+
+The effect is a *relative* one, exactly as the underlying mechanism predicts:
+refitting introduces an extra noise source (the fitted exercise boundary
+moving with the bumped data) on top of ordinary Monte Carlo sampling noise,
+so freezing helps most where that extra source is a large share of the total
+— smaller path counts (noisier regression) and smaller bump sizes (which
+divide by a smaller `2h`, amplifying whichever noise is present). At larger
+path counts combined with larger bumps, the regression is well-conditioned
+enough, and the bump large enough, that refitting barely perturbs the fitted
+boundary, and the effect shrinks to the point of statistical noise (0.99×,
+0.91× — not a real reversal, just no measurable difference at 40 trials).
+Reported both directions rather than only the setting that favors the
+mitigation. `tests/lsm_test.cpp`'s
+`Lsm.FrozenBoundaryGreeksHaveLowerVarianceThanNaiveRefit` uses the
+(N=5,000, h=0.10) row (naive/frozen = 1.35×) as a real, reproducible, and
+non-cherry-picked-to-the-extreme regression test of the effect.
+
+**Known, documented limitations** (per CLAUDE.md §6 Phase 5, stated plainly,
+not hidden):
+- LSM is a lower-bound estimator: the fitted continuation value is an
+  approximation, and using it to make exercise decisions can only leave value
+  on the table relative to the true optimal policy, never exceed it. Every
+  LSM price in this project should be read as such, not as an exact value.
+- Gamma for discontinuous payoffs (digitals, barriers near the boundary)
+  remains this engine's weakest estimate under finite differences — the
+  correct fix is a likelihood-ratio estimator, out of scope until the stretch
+  goals (CLAUDE.md §7).
+
 ## Sections (populated as later phases land)
 
 - CFA invariant results table
-- Bump-size sensitivity study (finite-difference Greeks)
-- LSM American option validation against binomial reference
-- Known limitations (documented, not hidden): LSM low-bias estimator; gamma for
-  discontinuous payoffs under finite differences

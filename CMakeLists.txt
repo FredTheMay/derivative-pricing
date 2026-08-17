@@ -28,10 +28,13 @@ add_library(mcd_core
     src/core/normal.cpp
     src/core/rng.cpp
     src/core/thread_pool.cpp
+    src/core/linalg.cpp
     src/models/gbm.cpp
     src/pricers/analytic.cpp
     src/pricers/binomial.cpp
     src/pricers/monte_carlo.cpp
+    src/pricers/lsm.cpp
+    src/greeks/finite_difference.cpp
 )
 target_include_directories(mcd_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
