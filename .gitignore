@@ -17,11 +17,12 @@ compile_commands.json
 .DS_Store
 Thumbs.db
 
-# Python (bindings, later phases)
+# Python (bindings)
 __pycache__/
 *.pyc
 .venv/
 *.egg-info/
+*.so
 
 # Node (web frontend, later phases)
 node_modules/

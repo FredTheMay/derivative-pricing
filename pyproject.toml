@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=64", "pybind11>=2.10"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcd"
+version = "0.1.0"
+description = "Python bindings for the mcd Monte Carlo derivatives pricing engine"
+requires-python = ">=3.9"
+
+[tool.setuptools]
+packages = []

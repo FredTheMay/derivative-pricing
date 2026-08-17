@@ -93,4 +93,4 @@ jobs:
           # so HeaderFilterRegex in .clang-tidy (matching include/mcd/.*) still
           # surfaces header-only findings -- using the correct flags, since they
           # come from the .cpp file's real compile command.
-          clang-tidy-16 -p build/debug $(git ls-files 'src/*.cpp')
+          clang-tidy-16 -p build/debug $(git ls-files 'src/*.cpp' 'apps/*.cpp')

@@ -12,6 +12,8 @@ add_executable(mcd_tests
     linalg_test.cpp
     greeks_test.cpp
     lsm_test.cpp
+    json_test.cpp
+    cli_test.cpp
 )
 
 target_link_libraries(mcd_tests PRIVATE
@@ -19,6 +21,12 @@ target_link_libraries(mcd_tests PRIVATE
     mcd_warnings
     GTest::gtest_main
 )
+
+# cli_test.cpp launches the real mcd_cli binary as a subprocess -- needs both the
+# resolved path to it and a guarantee that it's actually built first (mcd_tests
+# doesn't link mcd_cli, so CMake has no other reason to know about the dependency).
+add_dependencies(mcd_tests mcd_cli)
+target_compile_definitions(mcd_tests PRIVATE MCD_CLI_PATH="$<TARGET_FILE:mcd_cli>")
 
 include(GoogleTest)
 gtest_discover_tests(mcd_tests)

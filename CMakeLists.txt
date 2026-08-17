@@ -29,6 +29,7 @@ add_library(mcd_core
     src/core/rng.cpp
     src/core/thread_pool.cpp
     src/core/linalg.cpp
+    src/core/json.cpp
     src/models/gbm.cpp
     src/pricers/analytic.cpp
     src/pricers/binomial.cpp
@@ -42,6 +43,8 @@ target_include_directories(mcd_core PUBLIC
 target_compile_features(mcd_core PUBLIC cxx_std_20)
 target_compile_definitions(mcd_core PRIVATE MCD_VERSION_STRING="${PROJECT_VERSION}")
 target_link_libraries(mcd_core PRIVATE mcd_warnings PUBLIC Threads::Threads)
+
+add_subdirectory(apps/mcd_cli)
 
 if(MCD_ENABLE_TESTING)
     include(FetchContent)
