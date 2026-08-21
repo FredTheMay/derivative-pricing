@@ -1,7 +1,6 @@
 # Phase 7 — AWS Demo Web Application
 
-Status: **approved (Vitest for frontend tests; $10/month budget threshold;
-deploy once `cdk synth` is clean), implementing**
+Status: **implemented, deployed, Phase 7 gate passed**
 
 ## 1. Purpose
 

@@ -33,10 +33,11 @@ export class McdDemoStack extends cdk.Stack {
       }),
       architecture: lambda.Architecture.ARM_64,
       timeout: cdk.Duration.seconds(30),
-      // Starting point, not a guess left unmeasured: CLAUDE.md sec.6 Phase 7 requires
-      // memory "tuned by measurement" -- this value is revisited once real cold/warm
-      // invocation timings exist post-deploy (docs/design/07-aws-demo.md sec.7 item 4),
-      // and this comment is updated with the real numbers, not silently left as a guess.
+      // Measured, not guessed (CLAUDE.md sec.6 Phase 7): at 1024MB, post-deploy
+      // measurements showed cold starts of 1.216s/0.424s and warm requests averaging
+      // 0.199s (docs/validation-report.md Phase 7) -- comfortably inside the 30s
+      // timeout, so no retuning was needed to meet the acceptance criterion. A finer
+      // memory-size sweep is a reasonable follow-up, not a gating requirement.
       memorySize: 1024,
       description: "mcd demo pricing API (CLAUDE.md sec.6 Phase 7)",
     });

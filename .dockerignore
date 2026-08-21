@@ -1,15 +1,45 @@
-# CDK's DockerImageCode.fromImageAsset bundles the entire directory passed to it (the
+# CDK's DockerImageCode.fromImageAsset bundles the *entire* directory passed to it (the
 # repo root, since the Lambda builder stage needs include/ and src/ from the main engine
-# tree) as the Docker build context -- without this file, that includes build/ (CMake
-# artifacts, including a full nested git checkout under _deps/), infra/cdk.out/ itself
-# (recursively, compounding on every synth), and every node_modules/, none of which the
-# Lambda image build needs. Found the hard way: cdk synth failed with ENAMETOOLONG from
-# infra/cdk.out/ copying itself into itself repeatedly.
-.git/
-build/
-infra/cdk.out/
-infra/node_modules/
-web/node_modules/
-web/dist/
-**/__pycache__/
-*.so
+# tree) as the Docker build context, AND fingerprints that same post-.dockerignore tree
+# to decide whether the image needs rebuilding -- not just what the Dockerfile actually
+# COPYs. Two real problems found this way, both fixed here:
+#
+# 1. Without exclusions, the context included build/ (CMake artifacts, including a full
+#    nested git checkout under _deps/), infra/cdk.out/ itself (recursively, compounding
+#    on every synth), and every node_modules/. cdk synth failed with ENAMETOOLONG from
+#    infra/cdk.out/ copying itself into itself repeatedly (grew to 2.3GB before failing).
+# 2. Even after fixing (1), any edit to a file *anywhere* in the repo -- README.md, a
+#    doc, infra/lib/*.ts -- changed the asset fingerprint and forced a spurious image
+#    rebuild/republish on the next `cdk deploy`, even though the actual image bytes were
+#    identical (Docker's own layer cache hit every step; only CDK's directory-hash
+#    changed). Fixed by inverting to an allowlist: ignore everything, then explicitly
+#    un-ignore exactly the paths infra/lambda/Dockerfile's builder stage COPYs -- plus
+#    the Dockerfile itself (a third real bug this allowlist first tripped over: CDK
+#    stages a *filtered copy* of the context to cdk.out/ before invoking `docker build
+#    --file infra/lambda/Dockerfile`, unlike a plain local `docker buildx build -f ...`,
+#    which reads the Dockerfile straight off disk -- so if the Dockerfile isn't in the
+#    allowlist, the staged copy doesn't have it, and the build fails with "Dockerfile:
+#    no such file or directory" even though the exact same command works when run
+#    directly against the real repo tree).
+*
+
+!infra/lambda/Dockerfile
+!include/
+!include/**
+!src/core/types.cpp
+!src/core/normal.cpp
+!src/core/rng.cpp
+!src/core/thread_pool.cpp
+!src/core/linalg.cpp
+!src/models/
+!src/models/**
+!src/pricers/
+!src/pricers/**
+!src/greeks/
+!src/greeks/**
+!bindings/python/src/module.cpp
+!setup.py
+!pyproject.toml
+!infra/lambda/handler.py
+!infra/lambda/request.py
+!infra/lambda/cfa_invariants.py

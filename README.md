@@ -23,6 +23,27 @@ Live-regenerated versions of this chart and the rest of the numbers above run
 from `python tools/generate_report.py` — see the "Phase 6 — generated
 results" section of `docs/validation-report.md`.
 
+## Live demo
+
+Deployed on AWS (Lambda container image, ARM64/Graviton, API Gateway HTTP API,
+S3 + CloudFront) — see `docs/design/07-aws-demo.md` and the Phase 7 section of
+`docs/validation-report.md` for the full architecture and cost-guardrail rationale.
+
+| Metric | Value |
+|---|---|
+| Frontend | https://da9f58rzd0wm1.cloudfront.net |
+| API | https://4cpy3vq7l8.execute-api.us-east-2.amazonaws.com |
+| Cold-start latency (measured, 2 runs) | 1.22s, 0.42s (mean 0.82s) |
+| Warm-request latency (measured, 8 runs) | 0.15–0.29s (mean 0.20s) |
+| Estimated cost at zero traffic | ~$0.02/month (entirely ECR container-image storage: ~179 MiB × $0.10/GiB-month; Lambda, API Gateway, CloudFront, and S3 are all effectively $0 with no requests) |
+
+Every marquee chart on the live site (thread scaling, false-sharing A/B) is
+served from committed JSON (`docs/benchmarks/*.json`), never recomputed on
+request — a Lambda invocation cannot reproduce a controlled multi-core scaling
+measurement. Live pricing, the convergence explorer, the variance-reduction
+comparison, the Greeks surface, and the CFA invariant table all call the real
+deployed engine.
+
 ## Build and run
 
 ```

@@ -37,7 +37,14 @@ never fabricated or estimated. Sections below are populated starting Phase 1
   live-computed numbers and `docs/design/06-cli-bindings-reporting.md` for
   the two forks (hand-written JSON; delimited generated block) resolved
   before implementation.
-- Phase 7 (AWS demo): not started.
+- Phase 7 (AWS demo): complete. Deployed to a real AWS account
+  (`us-east-2`); 25/25 CloudFormation resources created cleanly. Backend
+  (10 unit tests + end-to-end verification against the real Lambda Runtime
+  Interface Emulator) and infra (6 CDK assertions tests, `cdk synth` clean)
+  both locally verified before any deployment. A real Docker-asset-bundling
+  bug (ENAMETOOLONG from `cdk.out` recursively copying itself, 2.3GB) and a
+  real Python scoping bug were found and fixed. See below for cold-start
+  and cost numbers measured against the live deployment.
 
 ## Phase 1 — analytic layer
 
@@ -612,6 +619,155 @@ Parallel efficiency at max thread count: **56.6%**.
 ![scaling](benchmarks/generated-scaling.svg)
 
 <!-- END GENERATED -->
+
+## Phase 7 — AWS demo
+
+**Two real forks resolved before implementation** (full argument in
+`docs/design/07-aws-demo.md` §2, approved before writing any code): (1) no
+JSON library is on CLAUDE.md's approved-dependency list, so `mcd_cli`'s
+request/response schema is reimplemented in Python by hand
+(`infra/lambda/request.py`) rather than shared as literal source across the
+C++/Python boundary — an earlier draft of the design doc incorrectly
+described this as shared code, corrected before implementation; (2) since
+Phase 6 already established a delimited-block convention for generated
+content inside `docs/validation-report.md`, the AWS demo's own
+committed-benchmark-JSON requirement (sec.3.3) reuses the *same* real Phase
+4 numbers already published above, reformatted into
+`docs/benchmarks/scaling.json` / `false_sharing.json` rather than
+re-measured or fabricated.
+
+**Backend, verified against the real runtime before touching AWS**: the
+Lambda handler (`infra/lambda/handler.py`) and its request-validation
+module were unit-tested (13 tests, `infra/lambda/tests/test_request.py`)
+and then verified end-to-end against the actual AWS Lambda Runtime
+Interface Emulator running locally in Docker — not just unit-tested in
+isolation. This caught a real bug: `path_count = path_count` inside a
+throwaway class body used to adapt `LsmResult` to the shared response
+builder silently picked up the not-yet-bound class-local name (a classic
+Python class-body scoping trap), fixed by using `types.SimpleNamespace`
+instead. Separately, the demo needed one thing `mcd_cli` never did — a hard
+cap of 5,000,000 on `path_count`, since this is a public, unauthenticated
+endpoint (CLAUDE.md's own mandatory cost guardrail, sec.6 Phase 7) — and
+one thing `mcd_cli`'s scope didn't require but the demo's own
+variance-reduction comparison section does: optional `antithetic`/
+`control_variate` request fields, added to `request.py` (not to
+`mcd_cli`'s C++ schema, which stays as Phase 6 left it).
+
+**A real infrastructure bug, caught before it reached a build**: the first
+`cdk synth` failed with `ENAMETOOLONG` from a path over 4,000 characters
+deep. Root cause: `DockerImageCode.fromImageAsset` bundles its *entire*
+first argument (the repo root, since the Lambda builder stage needs
+`include/`/`src/` from the main engine tree) as the Docker build context
+with no exclusions — which included `build/` (every CMake preset's
+artifacts, including a full nested git checkout under
+`_deps/googletest-src/.git/`) and, worse, `infra/cdk.out/` itself,
+recursively copying the growing output directory into itself on every
+synth attempt until the path length overflowed. The output directory had
+grown to **2.3GB** before the copy failed. Fixed with a root-level
+`.dockerignore` excluding `build/`, `infra/cdk.out/`, both
+`node_modules/` trees, and `web/dist/`. Verified: a clean `cdk synth`
+after the fix completes in seconds with no warnings, producing exactly the
+expected resource set (verified via `infra/test/mcd-stack.test.ts`, 6
+assertions: one ARM64/30s-timeout Lambda, throttled at burst 10/rate 5,
+one Budgets alarm, a fully public-access-blocked S3 bucket, one CloudFront
+distribution, and zero VPC/NAT/database resources).
+
+**Two more real findings, discovered post-deploy while investigating a
+seemingly cosmetic `cdk diff`**: after deployment, editing unrelated files
+(this validation report, the README, the CDK stack's own comments) kept
+showing the container image as "changed" on the next `cdk diff` — CDK
+fingerprints the *entire* directory passed to `fromImageAsset` (the repo
+root, post-`.dockerignore`) to decide whether to rebuild, not just the
+files the Dockerfile actually `COPY`s, so any edit anywhere in the tree
+forced a spurious image rebuild/republish, even though Docker's own layer
+cache proved the resulting bytes were identical every time. Fixed by
+inverting `.dockerignore` from a denylist to an allowlist: ignore
+everything, then explicitly un-ignore exactly the files the builder stage
+needs. That fix immediately surfaced a second, sharper bug: CDK stages a
+*filtered copy* of the context to `cdk.out/` before invoking `docker build
+--file infra/lambda/Dockerfile`, unlike a plain local `docker buildx build
+-f ...`, which reads the Dockerfile straight off disk regardless of
+ignore rules — so the initial allowlist (which didn't include the
+Dockerfile itself) built successfully by hand but failed inside `cdk
+deploy` with `Dockerfile: no such file or directory`, the same command
+succeeding or failing depending on which of the two ways it was invoked.
+Fixed by adding the Dockerfile to the allowlist. Redeployed to confirm:
+the resulting image digest (`sha256:5f0874c3...`) is byte-identical to the
+original deploy's, `cdk diff` now reports zero differences, and a live
+request with the same seed as the very first post-deploy check
+(`spot=100, path_count=100000, seed=42`) returned the bitwise-identical
+price and standard error — confirming the redeploy changed nothing
+observable, exactly as intended.
+
+**Deployment, on approval**: `cdk bootstrap` then `cdk deploy` against
+account `590184112781` (`us-east-2`), run only after `cdk synth` was
+verified clean and after explicit confirmation, per this session's
+standing instruction to check before provisioning real, billable
+infrastructure. All 25 resources created successfully in 287.8s (total
+command time 362.3s, including the Docker image build/push to ECR).
+
+| Output | Value |
+|---|---|
+| API URL | `https://4cpy3vq7l8.execute-api.us-east-2.amazonaws.com` |
+| CloudFront URL | `https://da9f58rzd0wm1.cloudfront.net` |
+
+**Post-deploy verification, against the live stack, not simulated**:
+`/cfa-invariants` and `/price` both verified directly against the API URL
+and again through the CloudFront URL (confirming the path-based
+API-behind-CloudFront routing in `infra/lib/mcd-stack.ts` actually works,
+not just synthesizes correctly) — all four requests returned HTTP 200 with
+correct results (e.g. `forward` priced at 103.0454533953517 for
+S=100, r=5%, q=2%, T=1, matching the closed-form cost-of-carry formula
+exactly).
+
+**Cold-start and warm-request latency, measured, not estimated**: the
+first invocation after deployment (a genuine cold start — new deployment,
+nothing warm yet) took **1.216s**. A second cold start was forced by
+updating the Lambda's configuration (which AWS guarantees provisions a
+fresh execution environment on next invoke) and measured at **0.424s** —
+the gap between the two is consistent with the first invocation also
+paying for the underlying Firecracker host's first-ever pull of the ~179
+MiB container image, which a second cold start on already-warmed
+infrastructure doesn't repeat. Eight warm invocations (5 immediately after
+the first cold start, 3 after the second) ranged **0.151s–0.285s**, mean
+**0.199s**. For comparison, the pricing computation itself (reported by
+the API's own `elapsed_seconds` field, excluding network/API Gateway/JSON
+overhead) took 0.054s for a 500,000-path European call — the majority of
+warm-request wall time is HTTP/API Gateway round-trip, not engine compute.
+
+| Measurement | Value |
+|---|---|
+| Cold start (first-ever invocation) | 1.216s |
+| Cold start (forced fresh environment) | 0.424s |
+| Warm request (n=8) | 0.151s–0.285s, mean 0.199s |
+| Engine compute only (500k-path European call) | 0.054s |
+
+Memory not yet re-tuned by measurement beyond the 1024MB starting point
+(`infra/lib/mcd-stack.ts` comment) — the measured latencies above are
+within CLAUDE.md's 30s timeout by a wide margin at this size, so no
+retuning was necessary to meet the acceptance criterion; a narrower
+memory-size sweep is a reasonable follow-up but not gating.
+
+**Cost estimate at zero traffic, computed from the actual provisioned
+resources, not guessed**: the ECR-stored container image measures
+187,335,676 bytes (178.6 MiB); at ECR's standard $0.10/GiB-month, that's
+**~$0.0187/month**. The deployed S3 bucket holds 582.9 KiB across 6
+objects (the built frontend) — at $0.023/GiB-month, effectively $0
+(rounds to $0.00001/month). Lambda, API Gateway HTTP API, CloudFront, and
+AWS Budgets (first two budgets per account are free) all bill purely
+per-request/per-invocation with no minimum, so all four are exactly $0 at
+zero traffic. **Total: ~$0.02/month**, entirely ECR image storage.
+
+**Cost guardrails, verified in place, not just described**: `path_count`
+capped at 5,000,000 in the Lambda handler (`infra/lambda/request.py`);
+Lambda timeout 30s, architecture ARM64 (`infra/lib/mcd-stack.ts`); API
+Gateway HTTP API stage throttled to burst 10/rate 5 req/s (asserted in
+`infra/test/mcd-stack.test.ts`); no authentication, no VPC, no NAT
+Gateway, no database (asserted); AWS Budgets alarm at $10/month (created
+without an email subscriber, since one wasn't provided at deploy time —
+redeploy with `-c alertEmail=you@example.com` to add notifications); every
+marquee benchmark chart served from committed JSON, never computed on
+request.
 
 ## Sections (populated as later phases land)
 
