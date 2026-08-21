@@ -15,7 +15,7 @@ Python bindings.
 | Bitwise determinism across thread counts | Verified for every product, thread counts {1,2,4,8,11} |
 | Max validation error vs. analytic/independent oracles | ≤ 3.0 standard errors (this project's fixed, never-exceeded acceptance threshold — see `docs/validation-report.md` for every measured deviation) |
 | Priced products | 9 (European, digital, arithmetic/geometric Asian, all 8 barrier types, both lookback styles, American, plus CRR binomial and forwards) |
-| Tests | 151, all passing on `debug`/`release`/`ubsan` locally and the full CI matrix |
+| Tests | 162, all passing on `debug`/`release`/`ubsan` locally and the full CI matrix |
 
 ![Thread scaling](docs/benchmarks/phase4-scaling.svg)
 
@@ -65,7 +65,8 @@ include/mcd/
 ├── payoffs/   Payoff / PathPayoff concepts (European, Asian, barrier,
 │              lookback, digital)
 ├── pricers/   Analytic oracles, CRR binomial, Monte Carlo, Longstaff-Schwartz
-└── greeks/    Finite-difference Greeks with common random numbers
+└── greeks/    Finite-difference Greeks with common random numbers,
+             likelihood-ratio Greeks
 
 apps/mcd_cli/       JSON-in/JSON-out CLI
 bindings/python/     pybind11 module + Python tests
@@ -146,9 +147,12 @@ only, no curriculum text) in `docs/cfa-mapping.md`.
   the table relative to the true optimal policy, never exceed it. Every LSM
   price in this project should be read as such.
 - **Gamma for discontinuous payoffs** (digitals, barriers near the boundary)
-  is this engine's weakest estimate under finite differences. A
-  likelihood-ratio estimator is the documented correct fix, out of scope
-  until the stretch goals in `CLAUDE.md` §7.
+  was this engine's weakest estimate under finite differences — fixed by a
+  likelihood-ratio estimator (`mcd::greeks::likelihood_ratio_*`, Stretch
+  Goal 1): measured 834× lower gamma standard error than FD for an
+  at-the-money digital, 11× for a barrier near its knock level. FD Greeks
+  remain the default for products LR doesn't cover (Asian, lookback,
+  American) and for European/digital/barrier callers who haven't switched.
 - **American Greeks require a frozen exercise boundary.** Bumping spot and
   refitting the LSM regression moves the fitted exercise boundary
   discontinuously, producing extremely noisy deltas. Mitigated by freezing

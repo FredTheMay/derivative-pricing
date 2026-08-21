@@ -85,6 +85,42 @@ export function greeksEuropean(params: {
   return postJson("/price", { product: "european", request: "greeks", ...params });
 }
 
+export interface LrGreeksResult {
+  value: number;
+  standard_error: number;
+}
+
+export interface LrGreeksResponse {
+  delta: number;
+  delta_se: number;
+  gamma: number;
+  gamma_se: number;
+  vega: number;
+  vega_se: number;
+  rho: number;
+  rho_se: number;
+  theta?: number;
+  theta_se?: number;
+}
+
+// Likelihood-ratio Greeks (Stretch Goal 1) -- fixes finite-difference gamma's documented
+// weak point for discontinuous payoffs. Exposed here for European; see LrVsFdGamma in the
+// C++ test suite for the digital/barrier gamma-near-discontinuity comparison this stretch
+// goal is actually about.
+export function lrGreeksEuropean(params: {
+  spot: number;
+  strike: number;
+  rate: number;
+  carry_yield: number;
+  vol: number;
+  time: number;
+  type: OptionType;
+  path_count: number;
+  seed: number;
+}): Promise<LrGreeksResponse> {
+  return postJson("/price", { product: "european", request: "lr_greeks", ...params });
+}
+
 export function priceProduct<T = McPriceResult | AnalyticPriceResult>(
   body: Record<string, unknown>,
 ): Promise<T> {

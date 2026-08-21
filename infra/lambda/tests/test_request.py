@@ -107,6 +107,36 @@ class DispatchTest(unittest.TestCase):
         for field in ("price", "standard_error", "ci_95_low", "ci_95_high"):
             self.assertIn(field, result)
 
+    def test_european_lr_greeks_returns_all_five_with_standard_errors(self):
+        result = handle_request({
+            "product": "european", "request": "lr_greeks", "spot": 100, "strike": 100,
+            "rate": 0.05, "carry_yield": 0.0, "vol": 0.2, "time": 1.0, "type": "call",
+            "path_count": 50_000, "seed": 1,
+        })
+        for field in ("delta", "delta_se", "gamma", "gamma_se", "vega", "vega_se",
+                      "theta", "theta_se", "rho", "rho_se"):
+            self.assertIn(field, result)
+
+    def test_digital_lr_greeks_returns_all_five(self):
+        result = handle_request({
+            "product": "digital", "request": "lr_greeks", "spot": 100, "strike": 100,
+            "rate": 0.05, "carry_yield": 0.0, "vol": 0.2, "time": 1.0, "type": "call",
+            "digital_style": "cash_or_nothing", "path_count": 50_000, "seed": 1,
+        })
+        for field in ("delta", "gamma", "vega", "theta", "rho"):
+            self.assertIn(field, result)
+
+    def test_barrier_lr_greeks_omits_theta(self):
+        result = handle_request({
+            "product": "barrier", "request": "lr_greeks", "spot": 100, "strike": 100,
+            "barrier": 120, "rate": 0.05, "carry_yield": 0.0, "vol": 0.2, "time": 1.0,
+            "type": "call", "direction": "up", "knock": "out", "monitoring_points": 20,
+            "path_count": 20_000, "seed": 1,
+        })
+        for field in ("delta", "gamma", "vega", "rho"):
+            self.assertIn(field, result)
+        self.assertNotIn("theta", result)
+
 
 if __name__ == "__main__":
     unittest.main()

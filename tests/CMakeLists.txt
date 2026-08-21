@@ -14,6 +14,7 @@ add_executable(mcd_tests
     lsm_test.cpp
     json_test.cpp
     cli_test.cpp
+    likelihood_ratio_test.cpp
 )
 
 target_link_libraries(mcd_tests PRIVATE

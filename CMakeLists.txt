@@ -36,6 +36,7 @@ add_library(mcd_core
     src/pricers/monte_carlo.cpp
     src/pricers/lsm.cpp
     src/greeks/finite_difference.cpp
+    src/greeks/likelihood_ratio.cpp
 )
 target_include_directories(mcd_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

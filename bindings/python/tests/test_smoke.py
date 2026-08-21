@@ -72,6 +72,52 @@ class GreeksTest(unittest.TestCase):
         self.assertLess(g.delta, 1.0)
         self.assertGreater(g.vega, 0.0)
 
+    def test_likelihood_ratio_european_greeks(self):
+        lr = mcd.likelihood_ratio_european(100, 100, 0.05, 0.0, 0.2, 1.0, mcd.OptionType.Call,
+                                             300_000, 42)
+        self.assertGreater(lr.delta.value, 0.0)
+        self.assertLess(lr.delta.value, 1.0)
+        self.assertGreater(lr.delta.standard_error, 0.0)
+        self.assertIsNotNone(lr.theta)
+
+    def test_likelihood_ratio_digital_and_barrier_greeks(self):
+        digital = mcd.likelihood_ratio_digital(100, 100, 0.05, 0.0, 0.2, 1.0,
+                                                 mcd.OptionType.Call,
+                                                 mcd.DigitalStyle.CashOrNothing, 1.0, 200_000, 7)
+        self.assertGreater(digital.gamma.standard_error, 0.0)
+
+        barrier = mcd.likelihood_ratio_barrier(100, 100, 120, 0.05, 0.0, 0.2, 1.0,
+                                                 mcd.OptionType.Call, mcd.BarrierDirection.Up,
+                                                 mcd.BarrierKnock.Out, 0.0, 50, 100_000, 11)
+        self.assertGreater(barrier.gamma.standard_error, 0.0)
+        # Barrier LR Greeks deliberately don't compute theta -- see the C++
+        # LrGreeks::theta comment (docs/design/08-likelihood-ratio-greeks.md sec.4).
+        self.assertIsNone(barrier.theta)
+
+    def test_likelihood_ratio_has_lower_gamma_standard_error_than_finite_difference_at_the_money_digital(self):
+        # The actual point of this stretch goal (CLAUDE.md sec.7 item 1): LR gamma
+        # should be dramatically more precise than FD gamma exactly where FD is
+        # weakest -- a discontinuous payoff evaluated at the discontinuity itself.
+        s, k, r, q, sigma, t = 100.0, 100.0, 0.05, 0.0, 0.25, 1.0
+        path_count, seed = 200_000, 7
+
+        lr = mcd.likelihood_ratio_digital(s, k, r, q, sigma, t, mcd.OptionType.Call,
+                                            mcd.DigitalStyle.CashOrNothing, 1.0, path_count, seed)
+
+        bumps = mcd.default_bump_sizes(s, sigma, t)
+        v_plus = mcd.monte_carlo_digital(s + bumps.spot, k, r, q, sigma, t, mcd.OptionType.Call,
+                                           mcd.DigitalStyle.CashOrNothing, 1.0, path_count, seed)
+        v0 = mcd.monte_carlo_digital(s, k, r, q, sigma, t, mcd.OptionType.Call,
+                                       mcd.DigitalStyle.CashOrNothing, 1.0, path_count, seed)
+        v_minus = mcd.monte_carlo_digital(s - bumps.spot, k, r, q, sigma, t, mcd.OptionType.Call,
+                                            mcd.DigitalStyle.CashOrNothing, 1.0, path_count, seed)
+        fd_gamma_se = (
+            (v_plus.standard_error ** 2 + 4 * v0.standard_error ** 2 + v_minus.standard_error ** 2)
+            ** 0.5
+        ) / (bumps.spot ** 2)
+
+        self.assertLess(lr.gamma.standard_error, fd_gamma_se)
+
 
 class BenchmarkHarnessTest(unittest.TestCase):
     def test_benchmark_european_reports_timing_and_throughput(self):

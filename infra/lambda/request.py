@@ -163,6 +163,26 @@ def _timed(fn):
     return result, time.perf_counter() - start
 
 
+def _lr_greeks_to_dict(g, elapsed):
+    """Every LR Greek carries its own standard error, same statistical treatment as every
+    other Monte Carlo result (docs/design/08-likelihood-ratio-greeks.md sec.5). theta is
+    omitted entirely for products where it isn't computed (barrier) -- never reported as
+    a misleading zero. Matches apps/mcd_cli/main.cpp's lr_greeks_to_json exactly (same
+    protocol, necessarily separate code across the C++/Python boundary, same as sec.2.1
+    of the design doc already explains for the base request schema)."""
+    out = {
+        "delta": g.delta.value, "delta_se": g.delta.standard_error,
+        "gamma": g.gamma.value, "gamma_se": g.gamma.standard_error,
+        "vega": g.vega.value, "vega_se": g.vega.standard_error,
+        "rho": g.rho.value, "rho_se": g.rho.standard_error,
+    }
+    if g.theta is not None:
+        out["theta"] = g.theta.value
+        out["theta_se"] = g.theta.standard_error
+    out["elapsed_seconds"] = elapsed
+    return out
+
+
 def _mc_options(req):
     """Optional variance-reduction toggles, for the demo's antithetic/control-variate
     on-vs-off comparison (docs/design/07-aws-demo.md sec.4 item 3) -- not part of
@@ -232,6 +252,13 @@ def handle_request(req):
             return {"delta": g.delta, "gamma": g.gamma, "vega": g.vega, "theta": g.theta,
                     "rho": g.rho, "elapsed_seconds": elapsed}
 
+        if request_kind == "lr_greeks":
+            path_count = _require_path_count(req)
+            seed = _require_count(req, "seed")
+            g, elapsed = _timed(lambda: mcd.likelihood_ratio_european(
+                spot, strike, rate, carry_yield, vol, expiry, option_type, path_count, seed))
+            return _lr_greeks_to_dict(g, elapsed)
+
         path_count = _require_path_count(req)
         seed = _require_count(req, "seed")
         options = _mc_options(req)
@@ -252,6 +279,13 @@ def handle_request(req):
         cash_amount = _optional_number(req, "cash_amount", 1.0)
         path_count = _require_path_count(req)
         seed = _require_count(req, "seed")
+
+        if request_kind == "lr_greeks":
+            g, elapsed = _timed(lambda: mcd.likelihood_ratio_digital(
+                spot, strike, rate, carry_yield, vol, expiry, option_type, style, cash_amount,
+                path_count, seed))
+            return _lr_greeks_to_dict(g, elapsed)
+
         result, elapsed = _timed(lambda: mcd.monte_carlo_digital(
             spot, strike, rate, carry_yield, vol, expiry, option_type, style, cash_amount,
             path_count, seed))
@@ -291,6 +325,13 @@ def handle_request(req):
         monitoring_points = _require_int(req, "monitoring_points")
         path_count = _require_path_count(req)
         seed = _require_count(req, "seed")
+
+        if request_kind == "lr_greeks":
+            g, elapsed = _timed(lambda: mcd.likelihood_ratio_barrier(
+                spot, strike, barrier, rate, carry_yield, vol, expiry, option_type, direction,
+                knock, rebate, monitoring_points, path_count, seed))
+            return _lr_greeks_to_dict(g, elapsed)
+
         result, elapsed = _timed(lambda: mcd.monte_carlo_barrier(
             spot, strike, barrier, rate, carry_yield, vol, expiry, option_type, direction,
             knock, rebate, monitoring_points, path_count, seed))

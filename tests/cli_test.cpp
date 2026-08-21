@@ -78,6 +78,45 @@ TEST(McdCli, EuropeanGreeksReturnsAllFiveGreeks) {
     }
 }
 
+TEST(McdCli, EuropeanLrGreeksReturnsAllFiveGreeksWithStandardErrors) {
+    const auto run = run_cli(
+        R"({"product":"european","request":"lr_greeks","spot":100,"strike":100,"rate":0.05,)"
+        R"("carry_yield":0.0,"vol":0.2,"time":1.0,"type":"call","path_count":200000,)"
+        R"("seed":42})");
+    ASSERT_EQ(run.exit_code, 0) << run.stdout_text;
+    const auto obj = mcd::json::parse_object(run.stdout_text);
+    for (const char* field : {"delta", "delta_se", "gamma", "gamma_se", "vega", "vega_se",
+                               "theta", "theta_se", "rho", "rho_se"}) {
+        EXPECT_NE(mcd::json::find(obj, field), nullptr) << "missing field: " << field;
+    }
+}
+
+TEST(McdCli, DigitalLrGreeksReturnsAllFiveGreeks) {
+    const auto run = run_cli(
+        R"({"product":"digital","request":"lr_greeks","spot":100,"strike":100,"rate":0.05,)"
+        R"("carry_yield":0.0,"vol":0.2,"time":1.0,"type":"call",)"
+        R"("digital_style":"cash_or_nothing","path_count":200000,"seed":7})");
+    ASSERT_EQ(run.exit_code, 0) << run.stdout_text;
+    const auto obj = mcd::json::parse_object(run.stdout_text);
+    for (const char* field : {"delta", "gamma", "vega", "theta", "rho"}) {
+        EXPECT_NE(mcd::json::find(obj, field), nullptr) << "missing field: " << field;
+    }
+}
+
+TEST(McdCli, BarrierLrGreeksOmitsThetaRatherThanReportingAMisleadingZero) {
+    const auto run = run_cli(
+        R"({"product":"barrier","request":"lr_greeks","spot":100,"strike":100,"barrier":120,)"
+        R"("rate":0.05,"carry_yield":0.0,"vol":0.2,"time":1.0,"type":"call","direction":"up",)"
+        R"("knock":"out","monitoring_points":50,"path_count":50000,"seed":11})");
+    ASSERT_EQ(run.exit_code, 0) << run.stdout_text;
+    const auto obj = mcd::json::parse_object(run.stdout_text);
+    for (const char* field : {"delta", "gamma", "vega", "rho"}) {
+        EXPECT_NE(mcd::json::find(obj, field), nullptr) << "missing field: " << field;
+    }
+    EXPECT_EQ(mcd::json::find(obj, "theta"), nullptr)
+        << "barrier LR Greeks should omit theta entirely, not report a misleading zero";
+}
+
 TEST(McdCli, ForwardReturnsPriceWithoutConfidenceInterval) {
     const auto run =
         run_cli(R"({"product":"forward","spot":100,"rate":0.05,"carry_yield":0.02,"time":1.0})");

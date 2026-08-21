@@ -769,6 +769,81 @@ redeploy with `-c alertEmail=you@example.com` to add notifications); every
 marquee benchmark chart served from committed JSON, never computed on
 request.
 
+## Stretch Goal 1 — likelihood-ratio Greeks
+
+Per CLAUDE.md §7 item 1 ("highest value of anything here"): a score-function
+(likelihood-ratio) Greeks estimator that fixes finite-difference Greeks'
+documented weak point — gamma for discontinuous payoffs — by differentiating
+the path's probability density instead of the payoff, so payoff smoothness
+never matters. Full derivation and scope rationale in
+`docs/design/08-likelihood-ratio-greeks.md`.
+
+**Score functions independently re-derived, not copied from memory of the
+literature**: delta, gamma, vega, rho, and theta score functions were each
+derived from first principles (differentiating GBM's lognormal transition
+density's log with respect to each parameter, holding the standard normal
+draw fixed — the same "what's held fixed" convention this project's CRN
+already relies on). Delta/gamma/vega match the published
+Broadie-Glasserman (1996) results, which is the check that actually
+matters; rho/theta required an extra product-rule term each (from
+differentiating the discount factor `e^{-rT}` itself) not present in the
+raw density-score formulas, derived and documented at the point of use in
+`src/greeks/likelihood_ratio.cpp`.
+
+**Validated against BSM analytic Greeks for European (4 parameter
+combinations, all 5 Greeks, within 3 SE)** — the sanity check that the
+re-derived formulas are actually correct, using the one product with an
+independent analytic oracle. All pass
+(`tests/likelihood_ratio_test.cpp`, `LrGreeksEuropeanVsAnalytic`).
+
+**The actual point of this stretch goal, measured, not just asserted** —
+LR gamma's standard error vs. finite-difference gamma's standard error,
+at exactly the parameters where FD is weakest:
+
+| Product | Parameters | LR gamma SE | FD gamma SE | Ratio (FD/LR) |
+|---|---|---:|---:|---:|
+| Digital (cash-or-nothing call) | S=K=100 (at the discontinuity), N=200,000 | 0.0000029 | 0.0024 | **834×** |
+| Barrier (up-and-out call) | S=100, H=105 (near the barrier), 50 monitoring points, N=100,000 | 0.000208 | 0.002271 | **11×** |
+
+Both measured with matched `(path_count, seed)` between the two estimators
+and FD's bump size taken from the same `default_bump_sizes` the rest of
+this project uses — not tuned differently to flatter either method.
+`tests/likelihood_ratio_test.cpp`'s `LrVsFdGamma` suite asserts LR's SE is
+strictly lower in both cases and prints the real numbers on every run.
+
+**Scope, disclosed rather than silently narrowed**: LR Greeks are
+implemented for European, digital, and barrier (CLAUDE.md's own named
+motivating cases), single-threaded (consistent with the Phase 5 FD Greeks
+precedent). Barrier's `theta` is deliberately not computed —
+discretely-monitored path-dependent theta entangles the monitoring step
+size with time-to-expiry in a way that doesn't reduce to the same clean
+per-step-sum generalization delta/gamma/vega/rho have; the API represents
+this as `None`/`nullopt`, never a misleading zero (`LrGreeks::theta` is
+`std::optional<LrGreeksResult>` in C++, `None` in Python, an omitted JSON
+field in `mcd_cli`/the AWS demo). Asian, lookback, and American are not
+covered by this pass — the path-dependent LR generalization used for
+barrier applies the same way to them, but CLAUDE.md's explicit ask was
+digitals and barriers specifically.
+
+**Wired through every surface, per your explicit choice for this stretch
+goal** (not deferred as engine-only): `mcd_cli` (`request: "lr_greeks"` on
+`european`/`digital`/`barrier`), the Python bindings
+(`mcd.likelihood_ratio_european/digital/barrier`, each Greek carrying its
+own `.value`/`.standard_error`, `theta` a real `None` for barrier), and the
+AWS demo (the Lambda's `/price` route accepts the same `request:
+"lr_greeks"` field; the frontend's Greeks Surface section gained a method
+toggle -- likelihood-ratio vs. finite-difference -- side by side on the
+same spot/time grid). 159/159 C++ tests passing (debug; release/ubsan
+below), 16/16 backend Python unit tests, 12/12 Python smoke tests, 11/11
+frontend Vitest tests.
+
+**Determinism**: identical seed produces a bitwise-identical LR Greeks
+result (`LrGreeksDeterminism`, `std::bit_cast`-based integer equality, same
+technique as every other determinism test in this project) — falls out for
+free from reusing the existing streaming RNG/`WelfordAccumulator`
+architecture unchanged, not a separate guarantee that needed proving from
+scratch.
+
 ## Sections (populated as later phases land)
 
 - CFA invariant results table

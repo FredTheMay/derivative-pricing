@@ -22,6 +22,7 @@ ENGINE_SOURCES = [
     "src/pricers/monte_carlo.cpp",
     "src/pricers/lsm.cpp",
     "src/greeks/finite_difference.cpp",
+    "src/greeks/likelihood_ratio.cpp",
 ]
 
 ext_modules = [

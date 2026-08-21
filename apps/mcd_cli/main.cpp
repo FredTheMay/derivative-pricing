@@ -2,6 +2,7 @@
 #include "mcd/core/timing.hpp"
 #include "mcd/core/types.hpp"
 #include "mcd/greeks/finite_difference.hpp"
+#include "mcd/greeks/likelihood_ratio.hpp"
 #include "mcd/pricers/analytic.hpp"
 #include "mcd/pricers/binomial.hpp"
 #include "mcd/pricers/lsm.hpp"
@@ -162,6 +163,28 @@ json::Object analytic_result_to_json(double price, double elapsed) {
     return out;
 }
 
+// Every LR Greek carries its own standard error, same statistical treatment as every
+// other Monte Carlo result in this project (docs/design/08-likelihood-ratio-greeks.md
+// sec.5). theta is omitted entirely (not reported as a misleading zero) for products
+// where it isn't computed -- see LrGreeks::theta's comment.
+void append_lr_result(json::Object& out, const char* name, const greeks::LrGreeksResult& r) {
+    out.emplace_back(name, json::Value::from_number(r.value));
+    out.emplace_back(std::string(name) + "_se", json::Value::from_number(r.standard_error));
+}
+
+json::Object lr_greeks_to_json(const greeks::LrGreeks& g, double elapsed) {
+    json::Object out;
+    append_lr_result(out, "delta", g.delta);
+    append_lr_result(out, "gamma", g.gamma);
+    append_lr_result(out, "vega", g.vega);
+    append_lr_result(out, "rho", g.rho);
+    if (g.theta.has_value()) {
+        append_lr_result(out, "theta", *g.theta);
+    }
+    out.emplace_back("elapsed_seconds", json::Value::from_number(elapsed));
+    return out;
+}
+
 json::Object handle_request(const json::Object& req) {
     const std::string product = require_string(req, "product");
     const std::string request_kind = optional_string(req, "request", "price");
@@ -231,6 +254,16 @@ json::Object handle_request(const json::Object& req) {
             return out;
         }
 
+        if (request_kind == "lr_greeks") {
+            const std::uint64_t path_count = require_count(req, "path_count");
+            const std::uint64_t seed = require_count(req, "seed");
+            const auto timed = mcd::time_call([&] {
+                return greeks::likelihood_ratio_european(spot, strike, rate, carry_yield, vol,
+                                                          time, type, path_count, seed);
+            });
+            return lr_greeks_to_json(timed.value, timed.elapsed_seconds);
+        }
+
         const std::uint64_t path_count = require_count(req, "path_count");
         const std::uint64_t seed = require_count(req, "seed");
         const auto timed = mcd::time_call([&] {
@@ -252,6 +285,16 @@ json::Object handle_request(const json::Object& req) {
         const double cash_amount = optional_number(req, "cash_amount", 1.0);
         const std::uint64_t path_count = require_count(req, "path_count");
         const std::uint64_t seed = require_count(req, "seed");
+
+        if (request_kind == "lr_greeks") {
+            const auto timed = mcd::time_call([&] {
+                return greeks::likelihood_ratio_digital(spot, strike, rate, carry_yield, vol,
+                                                         time, type, style, cash_amount,
+                                                         path_count, seed);
+            });
+            return lr_greeks_to_json(timed.value, timed.elapsed_seconds);
+        }
+
         const auto timed = mcd::time_call([&] {
             return pricers::monte_carlo_digital(spot, strike, rate, carry_yield, vol, time, type,
                                                  style, cash_amount, path_count, seed);
@@ -295,6 +338,17 @@ json::Object handle_request(const json::Object& req) {
         const int monitoring_points = require_int(req, "monitoring_points");
         const std::uint64_t path_count = require_count(req, "path_count");
         const std::uint64_t seed = require_count(req, "seed");
+
+        if (request_kind == "lr_greeks") {
+            const auto timed = mcd::time_call([&] {
+                return greeks::likelihood_ratio_barrier(spot, strike, barrier, rate, carry_yield,
+                                                         vol, time, type, direction, knock,
+                                                         rebate, monitoring_points, path_count,
+                                                         seed);
+            });
+            return lr_greeks_to_json(timed.value, timed.elapsed_seconds);
+        }
+
         const auto timed = mcd::time_call([&] {
             return pricers::monte_carlo_barrier(spot, strike, barrier, rate, carry_yield, vol,
                                                  time, type, direction, knock, rebate,

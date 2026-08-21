@@ -4,6 +4,7 @@
 #include "mcd/core/timing.hpp"
 #include "mcd/core/types.hpp"
 #include "mcd/greeks/finite_difference.hpp"
+#include "mcd/greeks/likelihood_ratio.hpp"
 #include "mcd/pricers/analytic.hpp"
 #include "mcd/pricers/binomial.hpp"
 #include "mcd/pricers/lsm.hpp"
@@ -110,6 +111,19 @@ PYBIND11_MODULE(mcd, m) {
         .def_readwrite("rate", &greeks::BumpSizes::rate)
         .def_readwrite("time", &greeks::BumpSizes::time);
 
+    py::class_<greeks::LrGreeksResult>(m, "LrGreeksResult")
+        .def_readonly("value", &greeks::LrGreeksResult::value)
+        .def_readonly("standard_error", &greeks::LrGreeksResult::standard_error);
+
+    py::class_<greeks::LrGreeks>(m, "LrGreeks")
+        .def_readonly("delta", &greeks::LrGreeks::delta)
+        .def_readonly("gamma", &greeks::LrGreeks::gamma)
+        .def_readonly("vega", &greeks::LrGreeks::vega)
+        .def_readonly("rho", &greeks::LrGreeks::rho)
+        // None for barrier (theta deliberately not computed there -- see the C++
+        // LrGreeks::theta comment), a real LrGreeksResult for European/digital.
+        .def_readonly("theta", &greeks::LrGreeks::theta);
+
     // Analytic pricers -- deterministic, GIL release is harmless but not load-bearing
     // (these are fast); released anyway for a uniform calling convention.
     m.def("black_scholes_merton", &pricers::black_scholes_merton, py::call_guard<py::gil_scoped_release>());
@@ -173,6 +187,14 @@ PYBIND11_MODULE(mcd, m) {
     // Finite-difference Greeks.
     m.def("default_bump_sizes", &greeks::default_bump_sizes, py::call_guard<py::gil_scoped_release>());
     m.def("finite_difference_european", &greeks::finite_difference_european,
+          py::call_guard<py::gil_scoped_release>());
+
+    // Likelihood-ratio Greeks (Stretch Goal 1, docs/design/08-likelihood-ratio-greeks.md).
+    m.def("likelihood_ratio_european", &greeks::likelihood_ratio_european,
+          py::call_guard<py::gil_scoped_release>());
+    m.def("likelihood_ratio_digital", &greeks::likelihood_ratio_digital,
+          py::call_guard<py::gil_scoped_release>());
+    m.def("likelihood_ratio_barrier", &greeks::likelihood_ratio_barrier,
           py::call_guard<py::gil_scoped_release>());
 
     // Benchmark harness. No call_guard here -- see the comment on benchmark_european's
