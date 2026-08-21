@@ -1,0 +1,10 @@
+{
+  "description": "False-sharing A/B measurement from Phase 4 (docs/validation-report.md, 'Phase 4 -- parallelism'), committed here as static JSON per CLAUDE.md sec.6 Phase 7's cost guardrails.",
+  "methodology": "bench/mc_bench.cpp, BM_FalseSharingUnpadded / BM_FalseSharingPadded, median of 7 runs, hardware_concurrency() threads each repeatedly updating their own accumulator slot.",
+  "hardware": "Apple M3 Pro, 5 performance + 6 efficiency cores, 11 physical/11 logical (no SMT)",
+  "result": "no measurable difference on this machine and workload -- both medians are within each other's noise (stddev ~0.2-0.4ms on ~17.4ms). Reported as measured, not as a claimed win: PaddedWelford is still used throughout since it is the theoretically correct choice and costs essentially nothing, but this specific measurement does not demonstrate a benefit on Apple Silicon's cache-coherency implementation for this access pattern.",
+  "layouts": [
+    { "layout": "unpadded", "median_ms": 17.4 },
+    { "layout": "padded", "median_ms": 17.5 }
+  ]
+}

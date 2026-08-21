@@ -1,0 +1,13 @@
+{
+  "description": "Thread-scaling measurements from Phase 4 (docs/validation-report.md, 'Phase 4 -- parallelism'), committed here as static JSON per CLAUDE.md sec.6 Phase 7's cost guardrails: the AWS demo's scaling chart is served from this file, never recomputed on request (a Lambda invocation cannot reproduce a controlled multi-core scaling measurement anyway).",
+  "methodology": "bench/mc_bench.cpp, BM_MonteCarloEuropeanThreads, median of 5 runs, European call, 2e7 paths per run.",
+  "hardware": "Apple M3 Pro, 5 performance + 6 efficiency cores, 11 physical/11 logical (no SMT)",
+  "compiler": "GCC 16, -O3 -march=native (Release preset)",
+  "amdahl_serial_fraction": 0.088,
+  "points": [
+    { "threads": 1, "speedup": 1.00, "efficiency": 1.00 },
+    { "threads": 4, "speedup": 3.76, "efficiency": 0.941 },
+    { "threads": 6, "speedup": 4.91, "efficiency": 0.819 },
+    { "threads": 11, "speedup": 5.97, "efficiency": 0.542 }
+  ]
+}

@@ -24,9 +24,14 @@ __pycache__/
 *.egg-info/
 *.so
 
-# Node (web frontend, later phases)
+# Node (web frontend, infra CDK app)
 node_modules/
 dist/
+*.tsbuildinfo
+cdk.out/
+# Copied from docs/benchmarks/*.json by web/scripts/sync-benchmarks.mjs at build time --
+# docs/benchmarks/ is the canonical, committed source.
+web/public/benchmarks/
 
 # Benchmark / profiling scratch
 *.prof

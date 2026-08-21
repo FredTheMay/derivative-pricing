@@ -1,0 +1,15 @@
+# CDK's DockerImageCode.fromImageAsset bundles the entire directory passed to it (the
+# repo root, since the Lambda builder stage needs include/ and src/ from the main engine
+# tree) as the Docker build context -- without this file, that includes build/ (CMake
+# artifacts, including a full nested git checkout under _deps/), infra/cdk.out/ itself
+# (recursively, compounding on every synth), and every node_modules/, none of which the
+# Lambda image build needs. Found the hard way: cdk synth failed with ENAMETOOLONG from
+# infra/cdk.out/ copying itself into itself repeatedly.
+.git/
+build/
+infra/cdk.out/
+infra/node_modules/
+web/node_modules/
+web/dist/
+**/__pycache__/
+*.so
