@@ -39,4 +39,34 @@ describe("GreeksSurface", () => {
     );
     expect(bodies[0].request).toBe("greeks");
   });
+
+  it("switches to pathwise and computes delta", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ delta: 0.5, delta_se: 0.01, vega: 30, vega_se: 0.5, rho: 40,
+                            rho_se: 0.2, elapsed_seconds: 0.1 }),
+    }));
+    render(<GreeksSurface />);
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[0], { target: { value: "delta" } });
+    fireEvent.change(selects[1], { target: { value: "pathwise" } });
+    fireEvent.click(screen.getByRole("button", { name: /compute surface/i }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(25), { timeout: 3000 });
+    const bodies = (fetch as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => JSON.parse((c[1] as RequestInit).body as string),
+    );
+    expect(bodies[0].request).toBe("pathwise_greeks");
+  });
+
+  it("disables the button and never calls the API when pathwise gamma is selected", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    render(<GreeksSurface />);
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[1], { target: { value: "pathwise" } });
+    // greek defaults to "gamma", which pathwise doesn't support.
+    fireEvent.click(screen.getByRole("button", { name: /compute surface/i }));
+    expect(screen.getByRole("button", { name: /compute surface/i })).toBeDisabled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.getByText(/structurally undefined/i)).toBeInTheDocument();
+  });
 });

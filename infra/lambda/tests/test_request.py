@@ -137,6 +137,66 @@ class DispatchTest(unittest.TestCase):
             self.assertIn(field, result)
         self.assertNotIn("theta", result)
 
+    def test_european_pathwise_greeks_returns_three_no_gamma_or_theta(self):
+        result = handle_request({
+            "product": "european", "request": "pathwise_greeks", "spot": 100, "strike": 100,
+            "rate": 0.05, "carry_yield": 0.0, "vol": 0.2, "time": 1.0, "type": "call",
+            "path_count": 50_000, "seed": 1,
+        })
+        for field in ("delta", "vega", "rho"):
+            self.assertIn(field, result)
+        for field in ("gamma", "theta"):
+            self.assertNotIn(field, result)
+
+    def test_asian_pathwise_greeks_returns_three(self):
+        result = handle_request({
+            "product": "asian", "request": "pathwise_greeks", "spot": 100, "strike": 100,
+            "rate": 0.05, "carry_yield": 0.0, "vol": 0.2, "time": 1.0, "type": "call",
+            "strike_style": "fixed", "average_style": "arithmetic", "monitoring_points": 12,
+            "path_count": 20_000, "seed": 1,
+        })
+        for field in ("delta", "vega", "rho"):
+            self.assertIn(field, result)
+
+    def test_european_qmc_sobol_returns_price_without_standard_error(self):
+        result = handle_request({
+            "product": "european", "request": "qmc_sobol", "spot": 100, "strike": 100,
+            "rate": 0.05, "carry_yield": 0.0, "vol": 0.2, "time": 1.0, "type": "call",
+            "path_count": 20_000,
+        })
+        self.assertIn("price", result)
+        self.assertIn("note", result)
+        self.assertNotIn("standard_error", result)
+        self.assertNotIn("seed", result)
+
+    def test_asian_qmc_sobol_returns_price(self):
+        result = handle_request({
+            "product": "asian", "request": "qmc_sobol", "spot": 100, "strike": 100,
+            "rate": 0.05, "carry_yield": 0.0, "vol": 0.25, "time": 1.0, "type": "call",
+            "strike_style": "fixed", "average_style": "arithmetic", "monitoring_points": 7,
+            "path_count": 10_000,
+        })
+        self.assertIn("price", result)
+        self.assertIn("note", result)
+
+    def test_asian_qmc_sobol_rejects_monitoring_points_above_cap(self):
+        with self.assertRaises(RequestError):
+            handle_request({
+                "product": "asian", "request": "qmc_sobol", "spot": 100, "strike": 100,
+                "rate": 0.05, "carry_yield": 0.0, "vol": 0.25, "time": 1.0, "type": "call",
+                "strike_style": "fixed", "average_style": "arithmetic",
+                "monitoring_points": 9, "path_count": 10_000,
+            })
+
+    def test_asian_qmc_sobol_rejects_geometric_average_style(self):
+        with self.assertRaises(RequestError):
+            handle_request({
+                "product": "asian", "request": "qmc_sobol", "spot": 100, "strike": 100,
+                "rate": 0.05, "carry_yield": 0.0, "vol": 0.25, "time": 1.0, "type": "call",
+                "strike_style": "fixed", "average_style": "geometric",
+                "monitoring_points": 5, "path_count": 10_000,
+            })
+
 
 if __name__ == "__main__":
     unittest.main()

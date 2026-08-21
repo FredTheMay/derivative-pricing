@@ -5,10 +5,13 @@
 #include "mcd/core/types.hpp"
 #include "mcd/greeks/finite_difference.hpp"
 #include "mcd/greeks/likelihood_ratio.hpp"
+#include "mcd/greeks/pathwise.hpp"
 #include "mcd/pricers/analytic.hpp"
 #include "mcd/pricers/binomial.hpp"
+#include "mcd/core/sobol.hpp"
 #include "mcd/pricers/lsm.hpp"
 #include "mcd/pricers/monte_carlo.hpp"
+#include "mcd/pricers/qmc.hpp"
 
 namespace py = pybind11;
 using namespace mcd;
@@ -124,6 +127,24 @@ PYBIND11_MODULE(mcd, m) {
         // LrGreeks::theta comment), a real LrGreeksResult for European/digital.
         .def_readonly("theta", &greeks::LrGreeks::theta);
 
+    py::class_<greeks::PathwiseGreeksResult>(m, "PathwiseGreeksResult")
+        .def_readonly("value", &greeks::PathwiseGreeksResult::value)
+        .def_readonly("standard_error", &greeks::PathwiseGreeksResult::standard_error);
+
+    // No gamma/theta attributes at all -- structurally undefined for pathwise on every
+    // product, not "not computed for this one" (see PathwiseGreeks's C++ comment).
+    py::class_<greeks::PathwiseGreeks>(m, "PathwiseGreeks")
+        .def_readonly("delta", &greeks::PathwiseGreeks::delta)
+        .def_readonly("vega", &greeks::PathwiseGreeks::vega)
+        .def_readonly("rho", &greeks::PathwiseGreeks::rho);
+
+    // No standard_error field -- Sobol QMC is deterministic, not a random variable in
+    // the sense plain Monte Carlo's paths are. See mcd::pricers::QmcResult's C++
+    // comment and docs/design/10-sobol-qmc.md sec.6.
+    py::class_<pricers::QmcResult>(m, "QmcResult").def_readonly("price", &pricers::QmcResult::price);
+
+    m.attr("SOBOL_MAX_DIMENSIONS") = kSobolMaxDimensions;
+
     // Analytic pricers -- deterministic, GIL release is harmless but not load-bearing
     // (these are fast); released anyway for a uniform calling convention.
     m.def("black_scholes_merton", &pricers::black_scholes_merton, py::call_guard<py::gil_scoped_release>());
@@ -196,6 +217,37 @@ PYBIND11_MODULE(mcd, m) {
           py::call_guard<py::gil_scoped_release>());
     m.def("likelihood_ratio_barrier", &greeks::likelihood_ratio_barrier,
           py::call_guard<py::gil_scoped_release>());
+
+    // Pathwise-derivative Greeks (Stretch Goal 2, docs/design/09-pathwise-greeks.md).
+    // pathwise_digital_delta_naive_and_broken deliberately not bound -- a documented
+    // failure mode exercised by the C++ test suite, not a product feature.
+    m.def("pathwise_european", &greeks::pathwise_european,
+          py::call_guard<py::gil_scoped_release>());
+    m.def("pathwise_asian", &greeks::pathwise_asian,
+          py::call_guard<py::gil_scoped_release>());
+
+    // Sobol QMC (Stretch Goal 3, docs/design/10-sobol-qmc.md). qmc_sobol_asian validates
+    // monitoring_points against SOBOL_MAX_DIMENSIONS here -- unlike every other pricer in
+    // this module, whose validation lives only at the mcd_cli/AWS request layer, this
+    // check is duplicated at the binding since Python callers do not go through mcd_cli.
+    m.def("qmc_sobol_european", &pricers::qmc_sobol_european, py::call_guard<py::gil_scoped_release>());
+    m.def(
+        "qmc_sobol_asian",
+        [](double spot, double strike, double rate, double carry_yield, double vol, double time,
+           OptionType type, StrikeStyle strike_style, int monitoring_points,
+           std::uint64_t path_count) {
+            if (monitoring_points < 1 ||
+                monitoring_points > static_cast<int>(kSobolMaxDimensions)) {
+                throw py::value_error("monitoring_points must be between 1 and " +
+                                       std::to_string(kSobolMaxDimensions));
+            }
+            py::gil_scoped_release release;
+            return pricers::qmc_sobol_asian(spot, strike, rate, carry_yield, vol, time, type,
+                                             strike_style, monitoring_points, path_count);
+        },
+        py::arg("spot"), py::arg("strike"), py::arg("rate"), py::arg("carry_yield"),
+        py::arg("vol"), py::arg("time"), py::arg("type"), py::arg("strike_style"),
+        py::arg("monitoring_points"), py::arg("path_count"));
 
     // Benchmark harness. No call_guard here -- see the comment on benchmark_european's
     // definition for why (it manages the GIL itself, around only the pricing call).

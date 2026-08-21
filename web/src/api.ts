@@ -121,6 +121,82 @@ export function lrGreeksEuropean(params: {
   return postJson("/price", { product: "european", request: "lr_greeks", ...params });
 }
 
+export interface PathwiseGreeksResponse {
+  delta: number;
+  delta_se: number;
+  vega: number;
+  vega_se: number;
+  rho: number;
+  rho_se: number;
+  // No gamma/theta fields at all -- structurally undefined for pathwise, not just
+  // unavailable for European. See docs/design/09-pathwise-greeks.md sec.3.
+}
+
+// Pathwise-derivative Greeks (Stretch Goal 2) -- cheap and unbiased for smooth payoffs
+// (European here), but has no gamma at all and would be silently wrong for a
+// discontinuous payoff's delta (see the C++ PathwiseFailureMode test).
+export function pathwiseGreeksEuropean(params: {
+  spot: number;
+  strike: number;
+  rate: number;
+  carry_yield: number;
+  vol: number;
+  time: number;
+  type: OptionType;
+  path_count: number;
+  seed: number;
+}): Promise<PathwiseGreeksResponse> {
+  return postJson("/price", { product: "european", request: "pathwise_greeks", ...params });
+}
+
+export interface QmcResult {
+  price: number;
+  path_count: number;
+  elapsed_seconds: number;
+  paths_per_second: number;
+  note: string;
+  // No standard_error/ci fields -- Sobol QMC is deterministic. See
+  // docs/design/10-sobol-qmc.md sec.6.
+}
+
+// Sobol-QMC with Brownian-bridge path construction (Stretch Goal 3) -- deterministic,
+// beats plain Monte Carlo's O(N^-0.5) convergence, capped at 7 monitoring dimensions
+// (docs/design/10-sobol-qmc.md sec.2: the from-scratch-verified dimension budget).
+export function qmcSobolEuropean(params: {
+  spot: number;
+  strike: number;
+  rate: number;
+  carry_yield: number;
+  vol: number;
+  time: number;
+  type: OptionType;
+  path_count: number;
+}): Promise<QmcResult> {
+  return postJson("/price", { product: "european", request: "qmc_sobol", ...params });
+}
+
+export const SOBOL_MAX_DIMENSIONS = 7;
+
+export function qmcSobolAsian(params: {
+  spot: number;
+  strike: number;
+  rate: number;
+  carry_yield: number;
+  vol: number;
+  time: number;
+  type: OptionType;
+  strike_style: "fixed" | "floating";
+  monitoring_points: number;
+  path_count: number;
+}): Promise<QmcResult> {
+  return postJson("/price", {
+    product: "asian",
+    request: "qmc_sobol",
+    average_style: "arithmetic",
+    ...params,
+  });
+}
+
 export function priceProduct<T = McPriceResult | AnalyticPriceResult>(
   body: Record<string, unknown>,
 ): Promise<T> {

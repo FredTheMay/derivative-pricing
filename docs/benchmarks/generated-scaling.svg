@@ -21,11 +21,11 @@
 <line x1="90" y1="430" x2="660" y2="430" stroke="#1a1a1a" stroke-width="1.5"/>
 <text x="375.0" y="478" text-anchor="middle" font-size="13" fill="#1a1a1a">thread count</text>
 <text x="18" y="235.0" text-anchor="middle" font-size="13" fill="#1a1a1a" transform="rotate(-90 18 235.0)">speedup vs. 1 thread</text>
-<path d="M90.0,374.3 L254.8,302.5 L472.6,216.9 L660.0,153.1" fill="none" stroke="#2166ac" stroke-width="2"/>
+<path d="M90.0,374.3 L254.8,303.9 L472.6,221.3 L660.0,168.0" fill="none" stroke="#2166ac" stroke-width="2"/>
 <circle cx="90.0" cy="374.3" r="3" fill="#2166ac"/>
-<circle cx="254.8" cy="302.5" r="3" fill="#2166ac"/>
-<circle cx="472.6" cy="216.9" r="3" fill="#2166ac"/>
-<circle cx="660.0" cy="153.1" r="3" fill="#2166ac"/>
+<circle cx="254.8" cy="303.9" r="3" fill="#2166ac"/>
+<circle cx="472.6" cy="221.3" r="3" fill="#2166ac"/>
+<circle cx="660.0" cy="168.0" r="3" fill="#2166ac"/>
 <line x1="100" y1="54" x2="124" y2="54" stroke="#2166ac" stroke-width="2"/>
 <text x="130" y="58" font-size="12" fill="#1a1a1a">speedup</text>
 </svg>

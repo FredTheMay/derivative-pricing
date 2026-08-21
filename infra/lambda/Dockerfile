@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir "pybind11>=2.10" "setuptools>=64"
 WORKDIR /build
 COPY include/ include/
 COPY src/core/types.cpp src/core/normal.cpp src/core/rng.cpp src/core/thread_pool.cpp \
-     src/core/linalg.cpp src/core/
+     src/core/linalg.cpp src/core/sobol.cpp src/core/
 COPY src/models/ src/models/
 COPY src/pricers/ src/pricers/
 COPY src/greeks/ src/greeks/

@@ -29,6 +29,21 @@ describe("ConvergenceExplorer", () => {
     await waitFor(() => expect(document.querySelector(".recharts-responsive-container")).toBeInTheDocument());
   });
 
+  it("renders the Sobol QMC comparison button", () => {
+    render(<ConvergenceExplorer />);
+    expect(screen.getByRole("button", { name: /compare with sobol qmc/i })).toBeInTheDocument();
+  });
+
+  it("fetches both plain MC and QMC prices for every path count on comparison", async () => {
+    render(<ConvergenceExplorer />);
+    fireEvent.click(screen.getByRole("button", { name: /compare with sobol qmc/i }));
+    // 5 path counts x 2 calls (plain MC + QMC) each.
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(10));
+    await waitFor(() =>
+      expect(document.querySelectorAll(".recharts-responsive-container").length).toBeGreaterThan(0),
+    );
+  });
+
   it("shows an error message if the API call fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: false,

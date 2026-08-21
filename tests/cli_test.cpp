@@ -117,6 +117,72 @@ TEST(McdCli, BarrierLrGreeksOmitsThetaRatherThanReportingAMisleadingZero) {
         << "barrier LR Greeks should omit theta entirely, not report a misleading zero";
 }
 
+TEST(McdCli, EuropeanPathwiseGreeksReturnsThreeGreeksNoGammaOrTheta) {
+    const auto run = run_cli(
+        R"({"product":"european","request":"pathwise_greeks","spot":100,"strike":100,)"
+        R"("rate":0.05,"carry_yield":0.0,"vol":0.2,"time":1.0,"type":"call",)"
+        R"("path_count":200000,"seed":42})");
+    ASSERT_EQ(run.exit_code, 0) << run.stdout_text;
+    const auto obj = mcd::json::parse_object(run.stdout_text);
+    for (const char* field : {"delta", "delta_se", "vega", "vega_se", "rho", "rho_se"}) {
+        EXPECT_NE(mcd::json::find(obj, field), nullptr) << "missing field: " << field;
+    }
+    for (const char* field : {"gamma", "theta"}) {
+        EXPECT_EQ(mcd::json::find(obj, field), nullptr)
+            << "pathwise Greeks should never report " << field
+            << " -- structurally undefined, not just unavailable for this product";
+    }
+}
+
+TEST(McdCli, AsianPathwiseGreeksReturnsThreeGreeks) {
+    const auto run = run_cli(
+        R"({"product":"asian","request":"pathwise_greeks","spot":100,"strike":100,)"
+        R"("rate":0.05,"carry_yield":0.0,"vol":0.2,"time":1.0,"type":"call",)"
+        R"("strike_style":"fixed","average_style":"arithmetic","monitoring_points":12,)"
+        R"("path_count":50000,"seed":42})");
+    ASSERT_EQ(run.exit_code, 0) << run.stdout_text;
+    const auto obj = mcd::json::parse_object(run.stdout_text);
+    for (const char* field : {"delta", "vega", "rho"}) {
+        EXPECT_NE(mcd::json::find(obj, field), nullptr) << "missing field: " << field;
+    }
+}
+
+TEST(McdCli, EuropeanQmcSobolReturnsPriceWithoutStandardError) {
+    const auto run = run_cli(
+        R"({"product":"european","request":"qmc_sobol","spot":100,"strike":100,)"
+        R"("rate":0.05,"carry_yield":0.0,"vol":0.2,"time":1.0,"type":"call",)"
+        R"("path_count":20000})");
+    ASSERT_EQ(run.exit_code, 0) << run.stdout_text;
+    const auto obj = mcd::json::parse_object(run.stdout_text);
+    EXPECT_NE(mcd::json::find(obj, "price"), nullptr);
+    EXPECT_NE(mcd::json::find(obj, "note"), nullptr);
+    EXPECT_EQ(mcd::json::find(obj, "standard_error"), nullptr)
+        << "Sobol QMC is deterministic -- no standard_error should be reported";
+    EXPECT_EQ(mcd::json::find(obj, "seed"), nullptr) << "qmc_sobol takes no seed";
+}
+
+TEST(McdCli, AsianQmcSobolReturnsPrice) {
+    const auto run = run_cli(
+        R"({"product":"asian","request":"qmc_sobol","spot":100,"strike":100,)"
+        R"("rate":0.05,"carry_yield":0.0,"vol":0.25,"time":1.0,"type":"call",)"
+        R"("strike_style":"fixed","average_style":"arithmetic","monitoring_points":7,)"
+        R"("path_count":10000})");
+    ASSERT_EQ(run.exit_code, 0) << run.stdout_text;
+    const auto obj = mcd::json::parse_object(run.stdout_text);
+    EXPECT_NE(mcd::json::find(obj, "price"), nullptr);
+}
+
+TEST(McdCli, AsianQmcSobolRejectsMonitoringPointsAboveDimensionCap) {
+    const auto run = run_cli(
+        R"({"product":"asian","request":"qmc_sobol","spot":100,"strike":100,)"
+        R"("rate":0.05,"carry_yield":0.0,"vol":0.25,"time":1.0,"type":"call",)"
+        R"("strike_style":"fixed","average_style":"arithmetic","monitoring_points":9,)"
+        R"("path_count":10000})");
+    ASSERT_NE(run.exit_code, 0);
+    const auto obj = mcd::json::parse_object(run.stdout_text);
+    EXPECT_NE(mcd::json::find(obj, "error"), nullptr);
+}
+
 TEST(McdCli, ForwardReturnsPriceWithoutConfidenceInterval) {
     const auto run =
         run_cli(R"({"product":"forward","spot":100,"rate":0.05,"carry_yield":0.02,"time":1.0})");

@@ -30,13 +30,17 @@ add_library(mcd_core
     src/core/thread_pool.cpp
     src/core/linalg.cpp
     src/core/json.cpp
+    src/core/sobol.cpp
     src/models/gbm.cpp
+    src/models/brownian_bridge_path.cpp
     src/pricers/analytic.cpp
     src/pricers/binomial.cpp
     src/pricers/monte_carlo.cpp
     src/pricers/lsm.cpp
+    src/pricers/qmc.cpp
     src/greeks/finite_difference.cpp
     src/greeks/likelihood_ratio.cpp
+    src/greeks/pathwise.cpp
 )
 target_include_directories(mcd_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

@@ -118,6 +118,54 @@ class GreeksTest(unittest.TestCase):
 
         self.assertLess(lr.gamma.standard_error, fd_gamma_se)
 
+    def test_pathwise_european_greeks(self):
+        pw = mcd.pathwise_european(100, 100, 0.05, 0.0, 0.2, 1.0, mcd.OptionType.Call,
+                                     300_000, 42)
+        self.assertGreater(pw.delta.value, 0.0)
+        self.assertLess(pw.delta.value, 1.0)
+        self.assertGreater(pw.delta.standard_error, 0.0)
+        # No gamma/theta attributes at all -- structurally undefined for pathwise.
+        self.assertFalse(hasattr(pw, "gamma"))
+        self.assertFalse(hasattr(pw, "theta"))
+
+    def test_pathwise_asian_greeks(self):
+        pw = mcd.pathwise_asian(100, 100, 0.05, 0.0, 0.2, 1.0, mcd.OptionType.Call,
+                                  mcd.StrikeStyle.Fixed, mcd.AverageStyle.Arithmetic, 12,
+                                  100_000, 42)
+        self.assertGreater(pw.delta.standard_error, 0.0)
+
+    def test_pathwise_digital_delta_fails_the_way_the_design_doc_says_it_should(self):
+        # Stretch Goal 2's actual point (CLAUDE.md sec.7 item 2: "where each breaks"):
+        # this isn't bound as a product feature (see module.cpp's comment) -- verify the
+        # underlying C++ behavior is still reachable and documented via the CLI instead,
+        # since Python callers should never be offered a broken estimator as if it were a
+        # real option. Confirms the function is deliberately absent from the module.
+        self.assertFalse(hasattr(mcd, "pathwise_digital_delta_naive_and_broken"))
+
+
+class QmcSobolTest(unittest.TestCase):
+    def test_qmc_sobol_european_within_tolerance_of_analytic(self):
+        analytic = mcd.black_scholes_merton(100, 100, 0.05, 0.02, 0.2, 1.0, mcd.OptionType.Call)
+        qmc = mcd.qmc_sobol_european(100, 100, 0.05, 0.02, 0.2, 1.0, mcd.OptionType.Call, 200_000)
+        self.assertAlmostEqual(qmc.price, analytic, delta=0.02)
+        # QmcResult carries no standard_error -- deterministic sequence, not a random
+        # variable. See docs/design/10-sobol-qmc.md sec.6.
+        self.assertFalse(hasattr(qmc, "standard_error"))
+
+    def test_qmc_sobol_asian_matches_plain_monte_carlo(self):
+        seed, path_count = 42, 100_000
+        mc = mcd.monte_carlo_asian(100, 100, 0.05, 0.02, 0.25, 1.0, mcd.OptionType.Call,
+                                     mcd.StrikeStyle.Fixed, mcd.AverageStyle.Arithmetic, 7,
+                                     path_count, seed)
+        qmc = mcd.qmc_sobol_asian(100, 100, 0.05, 0.02, 0.25, 1.0, mcd.OptionType.Call,
+                                    mcd.StrikeStyle.Fixed, 7, path_count)
+        self.assertLess(abs(qmc.price - mc.price), 3.0 * mc.standard_error + 0.1)
+
+    def test_qmc_sobol_asian_rejects_monitoring_points_above_the_dimension_cap(self):
+        with self.assertRaises(ValueError):
+            mcd.qmc_sobol_asian(100, 100, 0.05, 0.02, 0.25, 1.0, mcd.OptionType.Call,
+                                  mcd.StrikeStyle.Fixed, mcd.SOBOL_MAX_DIMENSIONS + 1, 10_000)
+
 
 class BenchmarkHarnessTest(unittest.TestCase):
     def test_benchmark_european_reports_timing_and_throughput(self):

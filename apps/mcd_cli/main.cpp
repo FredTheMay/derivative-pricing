@@ -1,12 +1,15 @@
 #include "mcd/core/json.hpp"
+#include "mcd/core/sobol.hpp"
 #include "mcd/core/timing.hpp"
 #include "mcd/core/types.hpp"
 #include "mcd/greeks/finite_difference.hpp"
 #include "mcd/greeks/likelihood_ratio.hpp"
+#include "mcd/greeks/pathwise.hpp"
 #include "mcd/pricers/analytic.hpp"
 #include "mcd/pricers/binomial.hpp"
 #include "mcd/pricers/lsm.hpp"
 #include "mcd/pricers/monte_carlo.hpp"
+#include "mcd/pricers/qmc.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -163,24 +166,60 @@ json::Object analytic_result_to_json(double price, double elapsed) {
     return out;
 }
 
-// Every LR Greek carries its own standard error, same statistical treatment as every
-// other Monte Carlo result in this project (docs/design/08-likelihood-ratio-greeks.md
-// sec.5). theta is omitted entirely (not reported as a misleading zero) for products
-// where it isn't computed -- see LrGreeks::theta's comment.
-void append_lr_result(json::Object& out, const char* name, const greeks::LrGreeksResult& r) {
+// Sobol-QMC results have no standard_error/CI: unlike every other Monte Carlo result in
+// this project, a Sobol sequence is a deterministic low-discrepancy point set, not a
+// random variable with a meaningful per-path variance -- see mcd::pricers::QmcResult's
+// comment and docs/design/10-sobol-qmc.md sec.6 for how accuracy is measured instead.
+// This is a deliberate, documented exception to CLAUDE.md's "a price reported without a
+// confidence interval is an incomplete result" rule, surfaced via the "note" field
+// rather than silently omitted, for the same structural reason pathwise_greeks_to_json
+// omits gamma/theta.
+json::Object qmc_result_to_json(const pricers::QmcResult& r, std::uint64_t path_count,
+                                 double elapsed) {
+    json::Object out;
+    out.emplace_back("price", json::Value::from_number(r.price));
+    out.emplace_back("path_count", json::Value::from_number(static_cast<double>(path_count)));
+    out.emplace_back("elapsed_seconds", json::Value::from_number(elapsed));
+    const double pps = elapsed > 0.0 ? static_cast<double>(path_count) / elapsed : 0.0;
+    out.emplace_back("paths_per_second", json::Value::from_number(pps));
+    out.emplace_back("note",
+                      json::Value::from_string(
+                          "Sobol QMC is deterministic: no standard_error/confidence interval "
+                          "is reported. See docs/design/10-sobol-qmc.md sec.6."));
+    return out;
+}
+
+// Every LR/pathwise Greek carries its own standard error, same statistical treatment as
+// every other Monte Carlo result in this project (docs/design/08-likelihood-ratio-
+// greeks.md sec.5, docs/design/09-pathwise-greeks.md sec.4). theta is omitted entirely
+// (not reported as a misleading zero) for products/methods where it isn't computed.
+template <typename GreekResult>
+void append_greek_result(json::Object& out, const char* name, const GreekResult& r) {
     out.emplace_back(name, json::Value::from_number(r.value));
     out.emplace_back(std::string(name) + "_se", json::Value::from_number(r.standard_error));
 }
 
 json::Object lr_greeks_to_json(const greeks::LrGreeks& g, double elapsed) {
     json::Object out;
-    append_lr_result(out, "delta", g.delta);
-    append_lr_result(out, "gamma", g.gamma);
-    append_lr_result(out, "vega", g.vega);
-    append_lr_result(out, "rho", g.rho);
+    append_greek_result(out, "delta", g.delta);
+    append_greek_result(out, "gamma", g.gamma);
+    append_greek_result(out, "vega", g.vega);
+    append_greek_result(out, "rho", g.rho);
     if (g.theta.has_value()) {
-        append_lr_result(out, "theta", *g.theta);
+        append_greek_result(out, "theta", *g.theta);
     }
+    out.emplace_back("elapsed_seconds", json::Value::from_number(elapsed));
+    return out;
+}
+
+// No gamma/theta fields at all (not omitted-when-empty, genuinely absent from the type)
+// -- pathwise gamma is structurally undefined for every product; see
+// mcd::greeks::PathwiseGreeks's comment.
+json::Object pathwise_greeks_to_json(const greeks::PathwiseGreeks& g, double elapsed) {
+    json::Object out;
+    append_greek_result(out, "delta", g.delta);
+    append_greek_result(out, "vega", g.vega);
+    append_greek_result(out, "rho", g.rho);
     out.emplace_back("elapsed_seconds", json::Value::from_number(elapsed));
     return out;
 }
@@ -264,6 +303,25 @@ json::Object handle_request(const json::Object& req) {
             return lr_greeks_to_json(timed.value, timed.elapsed_seconds);
         }
 
+        if (request_kind == "pathwise_greeks") {
+            const std::uint64_t path_count = require_count(req, "path_count");
+            const std::uint64_t seed = require_count(req, "seed");
+            const auto timed = mcd::time_call([&] {
+                return greeks::pathwise_european(spot, strike, rate, carry_yield, vol, time,
+                                                  type, path_count, seed);
+            });
+            return pathwise_greeks_to_json(timed.value, timed.elapsed_seconds);
+        }
+
+        if (request_kind == "qmc_sobol") {
+            const std::uint64_t path_count = require_count(req, "path_count");
+            const auto timed = mcd::time_call([&] {
+                return pricers::qmc_sobol_european(spot, strike, rate, carry_yield, vol, time,
+                                                    type, path_count);
+            });
+            return qmc_result_to_json(timed.value, path_count, timed.elapsed_seconds);
+        }
+
         const std::uint64_t path_count = require_count(req, "path_count");
         const std::uint64_t seed = require_count(req, "seed");
         const auto timed = mcd::time_call([&] {
@@ -314,7 +372,38 @@ json::Object handle_request(const json::Object& req) {
         const auto average_style = parse_average_style(require_string(req, "average_style"));
         const int monitoring_points = require_int(req, "monitoring_points");
         const std::uint64_t path_count = require_count(req, "path_count");
+
+        if (request_kind == "qmc_sobol") {
+            if (average_style != mcd::AverageStyle::Arithmetic) {
+                throw std::runtime_error("'qmc_sobol' asian only supports 'arithmetic' "
+                                          "average_style (docs/design/10-sobol-qmc.md sec.4)");
+            }
+            if (monitoring_points < 1 ||
+                monitoring_points > static_cast<int>(mcd::kSobolMaxDimensions)) {
+                throw std::runtime_error(
+                    "'monitoring_points' for 'qmc_sobol' asian must be between 1 and " +
+                    std::to_string(mcd::kSobolMaxDimensions) +
+                    " (docs/design/10-sobol-qmc.md sec.2/4: the from-scratch-verified Sobol "
+                    "dimension budget)");
+            }
+            const auto timed = mcd::time_call([&] {
+                return pricers::qmc_sobol_asian(spot, strike, rate, carry_yield, vol, time, type,
+                                                 strike_style, monitoring_points, path_count);
+            });
+            return qmc_result_to_json(timed.value, path_count, timed.elapsed_seconds);
+        }
+
         const std::uint64_t seed = require_count(req, "seed");
+
+        if (request_kind == "pathwise_greeks") {
+            const auto timed = mcd::time_call([&] {
+                return greeks::pathwise_asian(spot, strike, rate, carry_yield, vol, time, type,
+                                               strike_style, average_style, monitoring_points,
+                                               path_count, seed);
+            });
+            return pathwise_greeks_to_json(timed.value, timed.elapsed_seconds);
+        }
+
         const auto timed = mcd::time_call([&] {
             return pricers::monte_carlo_asian(spot, strike, rate, carry_yield, vol, time, type,
                                                strike_style, average_style, monitoring_points,

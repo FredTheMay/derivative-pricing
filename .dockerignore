@@ -31,6 +31,7 @@
 !src/core/rng.cpp
 !src/core/thread_pool.cpp
 !src/core/linalg.cpp
+!src/core/sobol.cpp
 !src/models/
 !src/models/**
 !src/pricers/

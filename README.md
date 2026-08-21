@@ -15,7 +15,7 @@ Python bindings.
 | Bitwise determinism across thread counts | Verified for every product, thread counts {1,2,4,8,11} |
 | Max validation error vs. analytic/independent oracles | ≤ 3.0 standard errors (this project's fixed, never-exceeded acceptance threshold — see `docs/validation-report.md` for every measured deviation) |
 | Priced products | 9 (European, digital, arithmetic/geometric Asian, all 8 barrier types, both lookback styles, American, plus CRR binomial and forwards) |
-| Tests | 162, all passing on `debug`/`release`/`ubsan` locally and the full CI matrix |
+| Tests | 178, all passing on `debug`/`release`/`ubsan` locally and the full CI matrix |
 
 ![Thread scaling](docs/benchmarks/phase4-scaling.svg)
 
@@ -60,13 +60,15 @@ Other CMake presets: `debug`, `asan`, `ubsan`, `tsan`. Python bindings:
 ```
 include/mcd/
 ├── core/      Philox4x32-10 RNG, inverse normal CDF, Welford accumulator,
-│              thread pool, Householder QR, hand-written JSON, timing
-├── models/    GBM exact log-Euler simulation
+│              thread pool, Householder QR, hand-written JSON, timing,
+│              hand-verified Sobol low-discrepancy sequence
+├── models/    GBM exact log-Euler simulation, Brownian-bridge path construction
 ├── payoffs/   Payoff / PathPayoff concepts (European, Asian, barrier,
 │              lookback, digital)
-├── pricers/   Analytic oracles, CRR binomial, Monte Carlo, Longstaff-Schwartz
+├── pricers/   Analytic oracles, CRR binomial, Monte Carlo, Longstaff-Schwartz,
+│              Sobol QMC
 └── greeks/    Finite-difference Greeks with common random numbers,
-             likelihood-ratio Greeks
+             likelihood-ratio Greeks, pathwise-derivative Greeks
 
 apps/mcd_cli/       JSON-in/JSON-out CLI
 bindings/python/     pybind11 module + Python tests
@@ -158,3 +160,25 @@ only, no curriculum text) in `docs/cfa-mapping.md`.
   discontinuously, producing extremely noisy deltas. Mitigated by freezing
   the base run's fitted policy and repricing bumped scenarios against it —
   quantified (not just asserted) in `docs/validation-report.md` Phase 5.
+- **Pathwise Greeks have no gamma at all, and are silently wrong for
+  discontinuous payoffs** (Stretch Goal 2). Pathwise differentiates the
+  payoff itself, not the density — a payoff's kink differentiated twice is
+  a Dirac delta (no gamma exists for any product under this method), and a
+  discontinuous payoff's naive pathwise delta measurably converges to
+  exactly `0.0` regardless of path count (`pathwise_digital_delta_naive_
+  and_broken`, deliberately not exposed as a product feature — see the
+  validation report for the measured failure). Where it *is* valid
+  (European, Asian), it's the cheapest and lowest-variance of the three
+  Greek estimators in this project — measured 2.6× lower delta standard
+  error than likelihood-ratio and 18× lower than finite-difference at
+  matched parameters.
+- **Sobol QMC is capped at 7 dimensions, by disclosed design, not
+  oversight** (Stretch Goal 3). No published direction-number table
+  (Joe-Kuo or similar) is used — this implementation only trusts what it
+  independently verified this session: 6 primitive polynomials over GF(2),
+  confirmed by direct LFSR maximal-period simulation, plus the simplest
+  legal initial direction numbers. Correctness-verified, not
+  discrepancy-optimal — real measured convergence still beats plain MC's
+  −0.5 log-log slope (measured −0.7469 vs. −0.5643 at matched path
+  counts), but higher-dimension products (barriers, lookbacks, LSM) are
+  out of scope for this pass.

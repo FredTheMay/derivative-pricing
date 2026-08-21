@@ -183,6 +183,35 @@ def _lr_greeks_to_dict(g, elapsed):
     return out
 
 
+def _pathwise_greeks_to_dict(g, elapsed):
+    """No gamma/theta fields at all -- structurally undefined for pathwise on every
+    product (docs/design/09-pathwise-greeks.md sec.3), not omitted-when-empty like LR's
+    barrier theta. Matches apps/mcd_cli/main.cpp's pathwise_greeks_to_json."""
+    return {
+        "delta": g.delta.value, "delta_se": g.delta.standard_error,
+        "vega": g.vega.value, "vega_se": g.vega.standard_error,
+        "rho": g.rho.value, "rho_se": g.rho.standard_error,
+        "elapsed_seconds": elapsed,
+    }
+
+
+def _qmc_result_to_dict(result, path_count, elapsed):
+    """No standard_error/CI -- Sobol QMC is deterministic, not a random variable in the
+    sense every other Monte Carlo result in this project is (docs/design/10-sobol-qmc.md
+    sec.6). A deliberate, documented exception to the "no price without a confidence
+    interval" rule, surfaced via a "note" field. Matches apps/mcd_cli/main.cpp's
+    qmc_result_to_json."""
+    pps = path_count / elapsed if elapsed > 0 else 0.0
+    return {
+        "price": result.price,
+        "path_count": path_count,
+        "elapsed_seconds": elapsed,
+        "paths_per_second": pps,
+        "note": "Sobol QMC is deterministic: no standard_error/confidence interval is "
+                "reported. See docs/design/10-sobol-qmc.md sec.6.",
+    }
+
+
 def _mc_options(req):
     """Optional variance-reduction toggles, for the demo's antithetic/control-variate
     on-vs-off comparison (docs/design/07-aws-demo.md sec.4 item 3) -- not part of
@@ -259,6 +288,19 @@ def handle_request(req):
                 spot, strike, rate, carry_yield, vol, expiry, option_type, path_count, seed))
             return _lr_greeks_to_dict(g, elapsed)
 
+        if request_kind == "pathwise_greeks":
+            path_count = _require_path_count(req)
+            seed = _require_count(req, "seed")
+            g, elapsed = _timed(lambda: mcd.pathwise_european(
+                spot, strike, rate, carry_yield, vol, expiry, option_type, path_count, seed))
+            return _pathwise_greeks_to_dict(g, elapsed)
+
+        if request_kind == "qmc_sobol":
+            path_count = _require_path_count(req)
+            result, elapsed = _timed(lambda: mcd.qmc_sobol_european(
+                spot, strike, rate, carry_yield, vol, expiry, option_type, path_count))
+            return _qmc_result_to_dict(result, path_count, elapsed)
+
         path_count = _require_path_count(req)
         seed = _require_count(req, "seed")
         options = _mc_options(req)
@@ -303,7 +345,29 @@ def handle_request(req):
         average_style = _average_style(req)
         monitoring_points = _require_int(req, "monitoring_points")
         path_count = _require_path_count(req)
+
+        if request_kind == "qmc_sobol":
+            if average_style != mcd.AverageStyle.Arithmetic:
+                raise RequestError("'qmc_sobol' asian only supports 'arithmetic' "
+                                    "average_style (docs/design/10-sobol-qmc.md sec.4)")
+            if monitoring_points < 1 or monitoring_points > mcd.SOBOL_MAX_DIMENSIONS:
+                raise RequestError(
+                    f"'monitoring_points' for 'qmc_sobol' asian must be between 1 and "
+                    f"{mcd.SOBOL_MAX_DIMENSIONS} (docs/design/10-sobol-qmc.md sec.2/4: "
+                    "the from-scratch-verified Sobol dimension budget)")
+            result, elapsed = _timed(lambda: mcd.qmc_sobol_asian(
+                spot, strike, rate, carry_yield, vol, expiry, option_type, strike_style,
+                monitoring_points, path_count))
+            return _qmc_result_to_dict(result, path_count, elapsed)
+
         seed = _require_count(req, "seed")
+
+        if request_kind == "pathwise_greeks":
+            g, elapsed = _timed(lambda: mcd.pathwise_asian(
+                spot, strike, rate, carry_yield, vol, expiry, option_type, strike_style,
+                average_style, monitoring_points, path_count, seed))
+            return _pathwise_greeks_to_dict(g, elapsed)
+
         options = _mc_options(req)
         result, elapsed = _timed(lambda: mcd.monte_carlo_asian(
             spot, strike, rate, carry_yield, vol, expiry, option_type, strike_style,
