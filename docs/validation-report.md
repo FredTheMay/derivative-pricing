@@ -1158,6 +1158,17 @@ independent source).
 run in full separately). 48/48 backend Python unit+smoke tests. 16/16
 frontend Vitest tests. clang-tidy clean (no errors).
 
+**Deployed and verified live** at
+`https://4cpy3vq7l8.execute-api.us-east-2.amazonaws.com` /
+`https://da9f58rzd0wm1.cloudfront.net`: `heston`/`semi_analytic` returned
+`16.070154917028773` against the live endpoint (matching Lewis's
+reference to the precision shown); `heston` QE priced successfully with a
+full CI; and a live `european` request confirmed `"simd_enabled": true`
+on the deployed Lambda -- direct evidence the NEON path (Stretch Goal 4)
+is genuinely active on the real ARM64/Graviton production hardware, not
+just the local dev machine, exactly the alignment sec.2 of
+`docs/design/11-simd.md` argued for.
+
 ## Sections (populated as later phases land)
 
 - CFA invariant results table
