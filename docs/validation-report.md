@@ -989,11 +989,14 @@ messages citing the design doc), the Python bindings
 (`mcd.qmc_sobol_european`/`qmc_sobol_asian`, with the same cap enforced in
 the binding itself since Python callers bypass `mcd_cli`), and the AWS
 demo's Convergence Explorer (a new "Compare with Sobol QMC" section
-plotting both methods' absolute error on the same log-log axes). 178/178
-C++ tests passing on debug (release and ubsan confirmed clean on the new
-Sobol/QMC test subset directly, full-suite reruns confirming no
-regressions elsewhere), 22/22 backend Python unit tests, 18/18 Python
-smoke tests, 15/15 frontend Vitest tests.
+plotting both methods' absolute error on the same log-log axes). 181/181
+C++ tests passing on debug, release (`-Werror`), and ubsan (each run in
+full separately), 22/22 backend Python unit tests, 18/18 Python smoke
+tests, 15/15 frontend Vitest tests. Deployed live:
+`https://4cpy3vq7l8.execute-api.us-east-2.amazonaws.com` (API),
+`https://da9f58rzd0wm1.cloudfront.net` (frontend) -- `qmc_sobol` on both
+`european` and `asian` verified against the live endpoint, including the
+dimension-cap rejection.
 
 ## Sections (populated as later phases land)
 

@@ -15,7 +15,7 @@ Python bindings.
 | Bitwise determinism across thread counts | Verified for every product, thread counts {1,2,4,8,11} |
 | Max validation error vs. analytic/independent oracles | ≤ 3.0 standard errors (this project's fixed, never-exceeded acceptance threshold — see `docs/validation-report.md` for every measured deviation) |
 | Priced products | 9 (European, digital, arithmetic/geometric Asian, all 8 barrier types, both lookback styles, American, plus CRR binomial and forwards) |
-| Tests | 178, all passing on `debug`/`release`/`ubsan` locally and the full CI matrix |
+| Tests | 181, all passing on `debug`/`release`/`ubsan` locally and the full CI matrix |
 
 ![Thread scaling](docs/benchmarks/phase4-scaling.svg)
 
