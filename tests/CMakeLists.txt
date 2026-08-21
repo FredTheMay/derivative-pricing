@@ -18,6 +18,9 @@ add_executable(mcd_tests
     pathwise_test.cpp
     sobol_test.cpp
     qmc_test.cpp
+    rng_simd_test.cpp
+    gauss_legendre_test.cpp
+    heston_test.cpp
 )
 
 target_link_libraries(mcd_tests PRIVATE

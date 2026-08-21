@@ -167,6 +167,36 @@ class QmcSobolTest(unittest.TestCase):
                                   mcd.StrikeStyle.Fixed, mcd.SOBOL_MAX_DIMENSIONS + 1, 10_000)
 
 
+class HestonTest(unittest.TestCase):
+    # Alan Lewis's published high-precision reference (financepress.com/2019/02/15/
+    # heston-model-reference-prices/), same source as tests/heston_test.cpp's
+    # kLewisReferenceCases. Lewis's SDE notation maps his theta_L (mean-reversion
+    # speed) to mcd's kappa, and his omega/theta_L to mcd's theta -- see the C++
+    # test's comment for the full derivation.
+    def _lewis_params(self):
+        p = mcd.HestonParams()
+        p.spot, p.rate, p.carry_yield = 100.0, 0.01, 0.02
+        p.v0, p.kappa, p.theta, p.xi, p.rho = 0.04, 4.0, 0.25, 1.0, -0.5
+        p.time = 1.0
+        return p
+
+    def test_semi_analytic_matches_published_reference(self):
+        price = mcd.heston_semi_analytic(self._lewis_params(), 100.0, mcd.OptionType.Call)
+        self.assertAlmostEqual(price, 16.070154917028834278, places=6)
+
+    def test_qe_within_three_se_of_semi_analytic(self):
+        params = self._lewis_params()
+        mc = mcd.heston_qe_european(params, 100.0, mcd.OptionType.Call, 50, 100_000, 42)
+        analytic = mcd.heston_semi_analytic(params, 100.0, mcd.OptionType.Call)
+        self.assertLess(abs(mc.price - analytic), 3.0 * mc.standard_error)
+
+    def test_qe_deterministic(self):
+        params = self._lewis_params()
+        a = mcd.heston_qe_european(params, 100.0, mcd.OptionType.Call, 20, 10_000, 7)
+        b = mcd.heston_qe_european(params, 100.0, mcd.OptionType.Call, 20, 10_000, 7)
+        self.assertEqual(a.price, b.price)
+
+
 class BenchmarkHarnessTest(unittest.TestCase):
     def test_benchmark_european_reports_timing_and_throughput(self):
         result = mcd.benchmark_european(100, 100, 0.05, 0.0, 0.2, 1.0, mcd.OptionType.Call,
@@ -176,6 +206,25 @@ class BenchmarkHarnessTest(unittest.TestCase):
         self.assertIn("paths_per_second", result)
         self.assertGreater(result["elapsed_seconds"], 0.0)
         self.assertGreater(result["paths_per_second"], 0.0)
+
+    def test_benchmark_european_reports_simd_enabled_matching_has_neon(self):
+        # Stretch Goal 4 (docs/design/11-simd.md): the fast path is used whenever
+        # NEON is compiled in and antithetic is off -- matches mcd.HAS_NEON here
+        # since McOptions() defaults antithetic to False.
+        result = mcd.benchmark_european(100, 100, 0.05, 0.0, 0.2, 1.0, mcd.OptionType.Call,
+                                          10_000, 42, mcd.McOptions())
+        self.assertEqual(result["simd_enabled"], mcd.HAS_NEON)
+
+    def test_european_price_deterministic_through_the_simd_path(self):
+        # Real bitwise-identity coverage between the SIMD batch and scalar RNG paths
+        # lives in tests/rng_simd_test.cpp (C++); this just confirms the SIMD-routed
+        # pricer is still deterministic seed-to-price through the Python binding.
+        seed, path_count = 7, 50_000
+        first = mcd.monte_carlo_european(100, 100, 0.05, 0.02, 0.2, 1.0,
+                                           mcd.OptionType.Call, path_count, seed)
+        second = mcd.monte_carlo_european(100, 100, 0.05, 0.02, 0.2, 1.0,
+                                            mcd.OptionType.Call, path_count, seed)
+        self.assertEqual(first.price, second.price)
 
 
 class GilReleaseTest(unittest.TestCase):

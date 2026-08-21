@@ -81,6 +81,24 @@ class DispatchTest(unittest.TestCase):
                       "seed", "elapsed_seconds", "paths_per_second"):
             self.assertIn(field, result)
 
+    def test_european_and_digital_report_simd_enabled(self):
+        # Stretch Goal 4 (docs/design/11-simd.md): surfaced per your explicit choice
+        # on this stretch goal's exposure. Value depends on the build machine's
+        # architecture (mcd.HAS_NEON); this only asserts the field is present.
+        european = handle_request({
+            "product": "european", "spot": 100, "strike": 100, "rate": 0.05,
+            "carry_yield": 0.0, "vol": 0.2, "time": 1.0, "type": "call",
+            "path_count": 10_000, "seed": 1,
+        })
+        self.assertIn("simd_enabled", european)
+
+        digital = handle_request({
+            "product": "digital", "spot": 100, "strike": 100, "rate": 0.05,
+            "carry_yield": 0.0, "vol": 0.2, "time": 1.0, "type": "call",
+            "digital_style": "cash_or_nothing", "path_count": 10_000, "seed": 1,
+        })
+        self.assertIn("simd_enabled", digital)
+
     def test_european_greeks_returns_all_five(self):
         result = handle_request({
             "product": "european", "request": "greeks", "spot": 100, "strike": 100,
@@ -105,6 +123,27 @@ class DispatchTest(unittest.TestCase):
             "monitoring_points": 10, "path_count": 20_000, "seed": 7,
         })
         for field in ("price", "standard_error", "ci_95_low", "ci_95_high"):
+            self.assertIn(field, result)
+
+    def test_heston_semi_analytic_matches_published_reference(self):
+        # Alan Lewis's reference price, same source as tests/heston_test.cpp.
+        result = handle_request({
+            "product": "heston", "request": "semi_analytic", "spot": 100, "strike": 100,
+            "rate": 0.01, "carry_yield": 0.02, "v0": 0.04, "kappa": 4.0, "theta": 0.25,
+            "xi": 1.0, "rho": -0.5, "time": 1.0, "type": "call",
+        })
+        self.assertAlmostEqual(result["price"], 16.070154917028834278, places=6)
+        self.assertNotIn("standard_error", result)
+
+    def test_heston_qe_returns_full_schema(self):
+        result = handle_request({
+            "product": "heston", "spot": 100, "strike": 100, "rate": 0.01,
+            "carry_yield": 0.02, "v0": 0.04, "kappa": 4.0, "theta": 0.25, "xi": 1.0,
+            "rho": -0.5, "time": 1.0, "type": "call", "monitoring_points": 20,
+            "path_count": 10_000, "seed": 1,
+        })
+        for field in ("price", "standard_error", "ci_95_low", "ci_95_high", "path_count",
+                      "seed", "elapsed_seconds", "paths_per_second"):
             self.assertIn(field, result)
 
     def test_european_lr_greeks_returns_all_five_with_standard_errors(self):

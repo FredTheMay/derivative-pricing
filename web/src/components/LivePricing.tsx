@@ -3,7 +3,7 @@ import { priceProduct, type AnalyticPriceResult, type McPriceResult, type Option
 
 const PRODUCTS = [
   "european", "digital", "asian", "barrier", "lookback", "american",
-  "binomial_european", "binomial_american", "forward",
+  "binomial_european", "binomial_american", "forward", "heston",
 ] as const;
 type Product = (typeof PRODUCTS)[number];
 
@@ -30,6 +30,15 @@ function buildRequest(product: Product): Record<string, unknown> {
                 path_count: 200_000, seed: 42 };
     case "american":
       return { product, ...common, type, monitoring_points: 20, path_count: 100_000, seed: 42 };
+    case "heston":
+      // Stretch Goal 5 (docs/design/12-heston.md): Alan Lewis's published reference
+      // parameters (kappa=4, theta=0.25, xi=1, rho=-0.5, v0=0.04) -- the same
+      // stress-test case the C++/Python test suites validate against, so this panel
+      // opens on a value already cross-checked against a real independent source,
+      // not an arbitrary default.
+      return { product, spot: 100, strike: 100, rate: 0.01, carry_yield: 0.02, type,
+                v0: 0.04, kappa: 4.0, theta: 0.25, xi: 1.0, rho: -0.5, time: 1.0,
+                monitoring_points: 50, path_count: 200_000, seed: 42 };
     case "european":
     default:
       return { product, ...common, type, path_count: 200_000, seed: 42 };

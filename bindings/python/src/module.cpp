@@ -8,6 +8,8 @@
 #include "mcd/greeks/pathwise.hpp"
 #include "mcd/pricers/analytic.hpp"
 #include "mcd/pricers/binomial.hpp"
+#include "mcd/pricers/heston.hpp"
+#include "mcd/core/rng_simd.hpp"
 #include "mcd/core/sobol.hpp"
 #include "mcd/pricers/lsm.hpp"
 #include "mcd/pricers/monte_carlo.hpp"
@@ -50,6 +52,10 @@ py::dict benchmark_european(double spot, double strike, double rate, double carr
         timed.elapsed_seconds > 0.0
             ? static_cast<double>(timed.value.path_count) / timed.elapsed_seconds
             : 0.0;
+    // Stretch Goal 4 (docs/design/11-simd.md): matches mcd_cli's simd_enabled field --
+    // European's monte_carlo_terminal fast path is used whenever NEON is available and
+    // antithetic is off.
+    out["simd_enabled"] = kHasNeon && !options.antithetic;
     return out;
 }
 
@@ -143,7 +149,30 @@ PYBIND11_MODULE(mcd, m) {
     // comment and docs/design/10-sobol-qmc.md sec.6.
     py::class_<pricers::QmcResult>(m, "QmcResult").def_readonly("price", &pricers::QmcResult::price);
 
+    // Stretch Goal 5 (docs/design/12-heston.md), wired through per your explicit
+    // choice despite the larger parameter surface (5 new fields beyond every other
+    // product's schema).
+    py::class_<models::HestonParams>(m, "HestonParams")
+        .def(py::init<>())
+        .def_readwrite("spot", &models::HestonParams::spot)
+        .def_readwrite("rate", &models::HestonParams::rate)
+        .def_readwrite("carry_yield", &models::HestonParams::carry_yield)
+        .def_readwrite("v0", &models::HestonParams::v0)
+        .def_readwrite("kappa", &models::HestonParams::kappa)
+        .def_readwrite("theta", &models::HestonParams::theta)
+        .def_readwrite("xi", &models::HestonParams::xi)
+        .def_readwrite("rho", &models::HestonParams::rho)
+        .def_readwrite("time", &models::HestonParams::time);
+
+    py::class_<pricers::HestonMcResult>(m, "HestonMcResult")
+        .def_readonly("price", &pricers::HestonMcResult::price)
+        .def_readonly("standard_error", &pricers::HestonMcResult::standard_error)
+        .def_readonly("path_count", &pricers::HestonMcResult::path_count);
+
     m.attr("SOBOL_MAX_DIMENSIONS") = kSobolMaxDimensions;
+    // Stretch Goal 4 (docs/design/11-simd.md): whether this build's vectorised
+    // Philox + inverse-CDF fast path (ARM NEON) is compiled in.
+    m.attr("HAS_NEON") = kHasNeon;
 
     // Analytic pricers -- deterministic, GIL release is harmless but not load-bearing
     // (these are fast); released anyway for a uniform calling convention.
@@ -248,6 +277,12 @@ PYBIND11_MODULE(mcd, m) {
         py::arg("spot"), py::arg("strike"), py::arg("rate"), py::arg("carry_yield"),
         py::arg("vol"), py::arg("time"), py::arg("type"), py::arg("strike_style"),
         py::arg("monitoring_points"), py::arg("path_count"));
+
+    // Heston stochastic volatility (Stretch Goal 5, docs/design/12-heston.md).
+    m.def("heston_qe_european", &pricers::heston_qe_european,
+          py::call_guard<py::gil_scoped_release>());
+    m.def("heston_semi_analytic", &pricers::heston_semi_analytic,
+          py::call_guard<py::gil_scoped_release>());
 
     // Benchmark harness. No call_guard here -- see the comment on benchmark_european's
     // definition for why (it manages the GIL itself, around only the pricing call).

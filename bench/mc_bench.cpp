@@ -1,3 +1,5 @@
+#include "mcd/core/rng.hpp"
+#include "mcd/core/rng_simd.hpp"
 #include "mcd/core/stats.hpp"
 #include "mcd/pricers/monte_carlo.hpp"
 
@@ -24,6 +26,37 @@ void BM_MonteCarloEuropean(benchmark::State& state) {
 }
 
 BENCHMARK(BM_MonteCarloEuropean)->Arg(1'000'000)->Unit(benchmark::kMillisecond);
+
+// --- Stretch Goal 4 (docs/design/11-simd.md sec.5): honest before/after throughput
+// for the vectorised RNG primitive itself, isolated from payoff/accumulation cost --
+// and the full pipeline, which now dispatches through the SIMD path automatically
+// whenever mcd::kHasNeon is true (see monte_carlo.cpp's monte_carlo_terminal). The
+// full-pipeline number is compared against Phase 2's originally recorded baseline
+// (docs/benchmarks/phase2.md, ~15.4M paths/sec on this same machine) in the
+// validation report, since that baseline was measured before this feature existed --
+// a real historical before/after, not a synthetic toggle.
+
+void BM_StandardNormalVariateScalar(benchmark::State& state) {
+    std::uint64_t path_index = 0;
+    for (auto _ : state) {
+        for (int i = 0; i < 4; ++i) {
+            benchmark::DoNotOptimize(mcd::standard_normal_variate(0, path_index + static_cast<std::uint64_t>(i)));
+        }
+        path_index += 4;
+    }
+    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()) * 4);
+}
+BENCHMARK(BM_StandardNormalVariateScalar);
+
+void BM_StandardNormalVariateBatch4(benchmark::State& state) {
+    std::uint64_t path_index = 0;
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(mcd::standard_normal_variate_batch4(0, path_index));
+        path_index += 4;
+    }
+    state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()) * 4);
+}
+BENCHMARK(BM_StandardNormalVariateBatch4);
 
 // --- Phase 4: paths/second and ns/path vs. thread count -------------------------------
 

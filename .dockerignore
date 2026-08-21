@@ -32,6 +32,8 @@
 !src/core/thread_pool.cpp
 !src/core/linalg.cpp
 !src/core/sobol.cpp
+!src/core/rng_simd.cpp
+!src/core/gauss_legendre.cpp
 !src/models/
 !src/models/**
 !src/pricers/

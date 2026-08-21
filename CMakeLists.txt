@@ -31,6 +31,8 @@ add_library(mcd_core
     src/core/linalg.cpp
     src/core/json.cpp
     src/core/sobol.cpp
+    src/core/rng_simd.cpp
+    src/core/gauss_legendre.cpp
     src/models/gbm.cpp
     src/models/brownian_bridge_path.cpp
     src/pricers/analytic.cpp
@@ -38,6 +40,7 @@ add_library(mcd_core
     src/pricers/monte_carlo.cpp
     src/pricers/lsm.cpp
     src/pricers/qmc.cpp
+    src/pricers/heston.cpp
     src/greeks/finite_difference.cpp
     src/greeks/likelihood_ratio.cpp
     src/greeks/pathwise.cpp
@@ -48,6 +51,15 @@ target_include_directories(mcd_core PUBLIC
 target_compile_features(mcd_core PUBLIC cxx_std_20)
 target_compile_definitions(mcd_core PRIVATE MCD_VERSION_STRING="${PROJECT_VERSION}")
 target_link_libraries(mcd_core PRIVATE mcd_warnings PUBLIC Threads::Threads)
+
+# Stretch Goal 4 (docs/design/11-simd.md sec.4): the scalar inverse CDF
+# (normal.cpp) and its NEON counterpart (rng_simd.cpp) must be bitwise identical.
+# FP contraction (auto fused-multiply-add) would let the compiler round one path's
+# Horner evaluation differently from the other's, so it's disabled explicitly for
+# just these two files -- not project-wide, and unrelated to -ffast-math.
+set_source_files_properties(src/core/normal.cpp src/core/rng_simd.cpp
+    PROPERTIES COMPILE_OPTIONS "-ffp-contract=off"
+)
 
 add_subdirectory(apps/mcd_cli)
 

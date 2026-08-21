@@ -66,6 +66,31 @@ TEST(McdCli, EuropeanCallSucceedsWithFullSchema) {
     EXPECT_NEAR(price, 10.45, 0.5);
 }
 
+// Stretch Goal 4 (docs/design/11-simd.md): European and digital report whether the
+// SIMD fast path produced the result, per your explicit choice to surface this rather
+// than keep it fully internal. This does not assert a specific value (true/false
+// depends on the build machine's architecture -- see mcd::kHasNeon) since this test
+// runs in CI (x86_64) as well as locally (ARM64); it only asserts the field exists
+// and parses as a bool.
+TEST(McdCli, EuropeanAndDigitalReportSimdEnabled) {
+    const auto european = run_cli(
+        R"({"product":"european","spot":100,"strike":100,"rate":0.05,"carry_yield":0.0,)"
+        R"("vol":0.2,"time":1.0,"type":"call","path_count":50000,"seed":42})");
+    ASSERT_EQ(european.exit_code, 0) << european.stdout_text;
+    const auto european_obj = mcd::json::parse_object(european.stdout_text);
+    const auto* simd_field = mcd::json::find(european_obj, "simd_enabled");
+    ASSERT_NE(simd_field, nullptr);
+    EXPECT_NO_THROW((void)simd_field->as_bool());
+
+    const auto digital = run_cli(
+        R"({"product":"digital","spot":100,"strike":100,"rate":0.05,"carry_yield":0.0,)"
+        R"("vol":0.2,"time":1.0,"type":"call","digital_style":"cash_or_nothing",)"
+        R"("path_count":50000,"seed":42})");
+    ASSERT_EQ(digital.exit_code, 0) << digital.stdout_text;
+    const auto digital_obj = mcd::json::parse_object(digital.stdout_text);
+    ASSERT_NE(mcd::json::find(digital_obj, "simd_enabled"), nullptr);
+}
+
 TEST(McdCli, EuropeanGreeksReturnsAllFiveGreeks) {
     const auto run = run_cli(
         R"({"product":"european","request":"greeks","spot":100,"strike":100,"rate":0.05,)"
@@ -181,6 +206,35 @@ TEST(McdCli, AsianQmcSobolRejectsMonitoringPointsAboveDimensionCap) {
     ASSERT_NE(run.exit_code, 0);
     const auto obj = mcd::json::parse_object(run.stdout_text);
     EXPECT_NE(mcd::json::find(obj, "error"), nullptr);
+}
+
+TEST(McdCli, HestonSemiAnalyticMatchesPublishedReference) {
+    // Alan Lewis's reference call price at K=100 for these parameters, per
+    // tests/heston_test.cpp's kLewisReferenceCases (financepress.com/2019/02/15/
+    // heston-model-reference-prices/).
+    const auto run = run_cli(
+        R"({"product":"heston","request":"semi_analytic","spot":100,"strike":100,)"
+        R"("rate":0.01,"carry_yield":0.02,"v0":0.04,"kappa":4.0,"theta":0.25,"xi":1.0,)"
+        R"("rho":-0.5,"time":1.0,"type":"call"})");
+    ASSERT_EQ(run.exit_code, 0) << run.stdout_text;
+    const auto obj = mcd::json::parse_object(run.stdout_text);
+    const double price = mcd::json::find(obj, "price")->as_number();
+    EXPECT_NEAR(price, 16.070154917028834278, 1e-6);
+    EXPECT_EQ(mcd::json::find(obj, "standard_error"), nullptr)
+        << "semi-analytic Heston is deterministic, no standard_error expected";
+}
+
+TEST(McdCli, HestonQeReturnsFullSchema) {
+    const auto run = run_cli(
+        R"({"product":"heston","spot":100,"strike":100,"rate":0.01,"carry_yield":0.02,)"
+        R"("v0":0.04,"kappa":4.0,"theta":0.25,"xi":1.0,"rho":-0.5,"time":1.0,"type":"call",)"
+        R"("monitoring_points":20,"path_count":50000,"seed":42})");
+    ASSERT_EQ(run.exit_code, 0) << run.stdout_text;
+    const auto obj = mcd::json::parse_object(run.stdout_text);
+    for (const char* field : {"price", "standard_error", "ci_95_low", "ci_95_high", "path_count",
+                               "seed", "elapsed_seconds", "paths_per_second"}) {
+        EXPECT_NE(mcd::json::find(obj, field), nullptr) << "missing field: " << field;
+    }
 }
 
 TEST(McdCli, ForwardReturnsPriceWithoutConfidenceInterval) {

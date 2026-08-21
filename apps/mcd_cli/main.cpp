@@ -1,4 +1,5 @@
 #include "mcd/core/json.hpp"
+#include "mcd/core/rng_simd.hpp"
 #include "mcd/core/sobol.hpp"
 #include "mcd/core/timing.hpp"
 #include "mcd/core/types.hpp"
@@ -7,6 +8,7 @@
 #include "mcd/greeks/pathwise.hpp"
 #include "mcd/pricers/analytic.hpp"
 #include "mcd/pricers/binomial.hpp"
+#include "mcd/pricers/heston.hpp"
 #include "mcd/pricers/lsm.hpp"
 #include "mcd/pricers/monte_carlo.hpp"
 #include "mcd/pricers/qmc.hpp"
@@ -328,7 +330,15 @@ json::Object handle_request(const json::Object& req) {
             return pricers::monte_carlo_european(spot, strike, rate, carry_yield, vol, time, type,
                                                   path_count, seed);
         });
-        return mc_result_to_json(timed.value, seed, timed.elapsed_seconds);
+        json::Object out = mc_result_to_json(timed.value, seed, timed.elapsed_seconds);
+        // Stretch Goal 4 (docs/design/11-simd.md): European and digital are the two
+        // products that funnel through monte_carlo_terminal's SIMD fast path, used
+        // automatically whenever NEON is available and antithetic is off -- true for
+        // this zero-options call. Reported for transparency into which code path
+        // produced a given throughput number, per your explicit choice on this stretch
+        // goal's exposure.
+        out.emplace_back("simd_enabled", json::Value::from_bool(mcd::kHasNeon));
+        return out;
     }
 
     if (product == "digital") {
@@ -357,7 +367,9 @@ json::Object handle_request(const json::Object& req) {
             return pricers::monte_carlo_digital(spot, strike, rate, carry_yield, vol, time, type,
                                                  style, cash_amount, path_count, seed);
         });
-        return mc_result_to_json(timed.value, seed, timed.elapsed_seconds);
+        json::Object out = mc_result_to_json(timed.value, seed, timed.elapsed_seconds);
+        out.emplace_back("simd_enabled", json::Value::from_bool(mcd::kHasNeon));
+        return out;
     }
 
     if (product == "asian") {
@@ -483,6 +495,42 @@ json::Object handle_request(const json::Object& req) {
         pricers::McResult as_mc{.price = timed.value.price,
                                  .standard_error = timed.value.standard_error,
                                  .path_count = path_count};
+        return mc_result_to_json(as_mc, seed, timed.elapsed_seconds);
+    }
+
+    if (product == "heston") {
+        const double spot = require_number(req, "spot");
+        const double strike = require_number(req, "strike");
+        const double rate = require_number(req, "rate");
+        const double carry_yield = require_number(req, "carry_yield");
+        const double v0 = require_number(req, "v0");
+        const double kappa = require_number(req, "kappa");
+        const double theta = require_number(req, "theta");
+        const double xi = require_number(req, "xi");
+        const double rho = require_number(req, "rho");
+        const double time = require_number(req, "time");
+        const OptionType type = parse_option_type(require_string(req, "type"));
+        const mcd::models::HestonParams params{.spot = spot, .rate = rate,
+                                                 .carry_yield = carry_yield, .v0 = v0,
+                                                 .kappa = kappa, .theta = theta, .xi = xi,
+                                                 .rho = rho, .time = time};
+
+        if (request_kind == "semi_analytic") {
+            const auto timed = mcd::time_call(
+                [&] { return pricers::heston_semi_analytic(params, strike, type); });
+            return analytic_result_to_json(timed.value, timed.elapsed_seconds);
+        }
+
+        const int monitoring_points = require_int(req, "monitoring_points");
+        const std::uint64_t path_count = require_count(req, "path_count");
+        const std::uint64_t seed = require_count(req, "seed");
+        const auto timed = mcd::time_call([&] {
+            return pricers::heston_qe_european(params, strike, type, monitoring_points,
+                                                path_count, seed);
+        });
+        pricers::McResult as_mc{.price = timed.value.price,
+                                 .standard_error = timed.value.standard_error,
+                                 .path_count = timed.value.path_count};
         return mc_result_to_json(as_mc, seed, timed.elapsed_seconds);
     }
 

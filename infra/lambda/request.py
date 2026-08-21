@@ -307,7 +307,10 @@ def handle_request(req):
         result, elapsed = _timed(lambda: mcd.monte_carlo_european(
             spot, strike, rate, carry_yield, vol, expiry, option_type, path_count, seed,
             options))
-        return _mc_result_to_dict(result, seed, elapsed)
+        out = _mc_result_to_dict(result, seed, elapsed)
+        # Stretch Goal 4 (docs/design/11-simd.md): matches mcd_cli/bindings' simd_enabled.
+        out["simd_enabled"] = mcd.HAS_NEON and not options.antithetic
+        return out
 
     if product == "digital":
         spot = _require_number(req, "spot")
@@ -331,7 +334,9 @@ def handle_request(req):
         result, elapsed = _timed(lambda: mcd.monte_carlo_digital(
             spot, strike, rate, carry_yield, vol, expiry, option_type, style, cash_amount,
             path_count, seed))
-        return _mc_result_to_dict(result, seed, elapsed)
+        out = _mc_result_to_dict(result, seed, elapsed)
+        out["simd_enabled"] = mcd.HAS_NEON
+        return out
 
     if product == "asian":
         spot = _require_number(req, "spot")
@@ -438,5 +443,35 @@ def handle_request(req):
         as_mc = SimpleNamespace(price=result.price, standard_error=result.standard_error,
                                  path_count=path_count)
         return _mc_result_to_dict(as_mc, seed, elapsed)
+
+    if product == "heston":
+        spot = _require_number(req, "spot")
+        strike = _require_number(req, "strike")
+        rate = _require_number(req, "rate")
+        carry_yield = _require_number(req, "carry_yield")
+        v0 = _require_number(req, "v0")
+        kappa = _require_number(req, "kappa")
+        theta = _require_number(req, "theta")
+        xi = _require_number(req, "xi")
+        rho = _require_number(req, "rho")
+        expiry = _require_number(req, "time")
+        option_type = _option_type(req)
+
+        params = mcd.HestonParams()
+        params.spot, params.rate, params.carry_yield = spot, rate, carry_yield
+        params.v0, params.kappa, params.theta, params.xi, params.rho = v0, kappa, theta, xi, rho
+        params.time = expiry
+
+        if request_kind == "semi_analytic":
+            price, elapsed = _timed(
+                lambda: mcd.heston_semi_analytic(params, strike, option_type))
+            return _analytic_result_to_dict(price, elapsed)
+
+        monitoring_points = _require_int(req, "monitoring_points")
+        path_count = _require_path_count(req)
+        seed = _require_count(req, "seed")
+        result, elapsed = _timed(lambda: mcd.heston_qe_european(
+            params, strike, option_type, monitoring_points, path_count, seed))
+        return _mc_result_to_dict(result, seed, elapsed)
 
     raise RequestError(f"unknown 'product': '{product}'")

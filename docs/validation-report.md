@@ -998,6 +998,166 @@ tests, 15/15 frontend Vitest tests. Deployed live:
 `european` and `asian` verified against the live endpoint, including the
 dimension-cap rejection.
 
+## Stretch Goal 4 — SIMD (vectorised Philox and inverse CDF)
+
+Design: `docs/design/11-simd.md`. Per CLAUDE.md §7 item 4.
+
+**The instruction-set fork, resolved with a real reason, not just
+availability.** The original framing assumed AVX2/AVX-512, but this
+development machine is Apple Silicon (ARM64) and cannot compile or run
+x86 intrinsics at all. Target: **ARM NEON**, confirmed by you — it
+matches both this dev machine and the already-deployed AWS Lambda
+(ARM64/Graviton), so it's fully verifiable and benchmarkable on real
+hardware, and is directly usable in production, unlike an AVX2 path that
+would only ever run inside a container. x86 CI (`ubuntu-24.04`) compiles
+and exercises a portable scalar fallback via the same public function
+(`standard_normal_variate_batch4`) -- callers never branch on
+availability.
+
+**Bitwise identity, not just "close."** Philox is pure integer
+arithmetic (add/multiply/xor), so a NEON widening multiply and four
+scalar multiplies are guaranteed identical by IEEE/integer semantics --
+no test needed to trust this, though `tests/rng_simd_test.cpp` checks it
+anyway. The inverse CDF is floating point, where the real risk is FP
+contraction (auto fused-multiply-add rounding differently between the
+scalar and NEON Horner evaluations) -- resolved by compiling both
+`src/core/normal.cpp` and `src/core/rng_simd.cpp` with
+`-ffp-contract=off` (a CMake per-file `COMPILE_OPTIONS`, not a pragma --
+GCC doesn't recognize `#pragma STDC FP_CONTRACT`). Result: **every
+bitwise-identity test passed on the first successful build** across a
+grid of 4 seeds x 5 path-index bases (including one deliberately
+straddling the counter's 32-bit word boundary) x 4 draw indices, compared
+via `std::bit_cast<uint64_t>` equality, not `EXPECT_DOUBLE_EQ`.
+
+**Integration**: wired into `monte_carlo_terminal` (the shared
+draw-payoff-discount path behind `monte_carlo_european` and
+`monte_carlo_digital`), used automatically whenever NEON is available and
+antithetic is off, dispatching through the exact same chunk/thread
+merge order as every other pricer (`run_chunked_and_merge`, factored out
+of `accumulate_paths` for this purpose) -- so the bitwise-determinism-
+across-thread-count guarantee from Phase 4 is untouched by construction,
+not just by testing.
+
+**Honest before/after throughput**, measured on this machine
+(Apple M3 Pro, Release, `-O3 -march=native`), a controlled A/B on the
+exact same build (not just a comparison against the older Phase 2
+baseline, though the two numbers corroborate each other):
+
+| Benchmark | Scalar-only (control build) | SIMD (real build) | Ratio |
+|---|---:|---:|---:|
+| `standard_normal_variate` (RNG primitive alone) | 26.6M draws/sec | 28.7M draws/sec | 1.08x |
+| `monte_carlo_european`, full pipeline, 10⁶ paths | 15.76M paths/sec (median of 5) | 20.67M paths/sec (median of 5) | 1.31x |
+
+The primitive-level speedup (1.08x) is modest and disclosed as such: the
+inverse CDF's transcendental calls (`log`, `exp`, `erfc`) have no portable
+NEON intrinsic guaranteed bit-identical to `std::log`/`std::exp`/`std::erfc`,
+so they stay per-lane scalar inside the vectorised function -- only the
+Philox integer step and the polynomial (Horner) evaluation are truly
+vectorised. The full-pipeline number is higher (1.31x) because Philox
+itself (10 rounds of 4-wide integer ops) is a larger share of total cost
+once payoff evaluation and Welford accumulation are folded in. Neither
+number is fabricated or rounded up -- this is what was actually measured,
+including where the win is smaller than a naive "4-wide, so 4x faster"
+expectation would suggest.
+
+**Wired through mcd_cli, bindings, and the AWS demo backend**, per your
+choice to surface a `simd_enabled` field rather than keep this fully
+internal: `mcd_cli`'s `european`/`digital` responses,
+`mcd.HAS_NEON`/`benchmark_european`'s `simd_enabled` key in the Python
+bindings, and the Lambda handler's `european`/`digital` responses all
+report whether the fast path was used for that specific call.
+
+Full C++ suite: 186/186 tests passing on debug, release (`-Werror`), and
+ubsan (each run in full separately). 43/43 backend Python
+unit+smoke tests (up from 40, three new tests for `HAS_NEON`/
+`simd_enabled`). clang-tidy clean (no errors; the small number of
+`cppcoreguidelines-pro-bounds-*` warnings are inherent to the NEON
+intrinsic API, which takes raw pointers, not `std::array` -- same
+category already present and accepted elsewhere in this codebase).
+
+## Stretch Goal 5 — Heston stochastic volatility
+
+Design: `docs/design/12-heston.md`. Per CLAUDE.md §7 item 5.
+
+**Scope**: European call/put only, priced two ways --
+`heston_qe_european` (Andersen 2008's Quadratic-Exponential Monte Carlo
+scheme) and `heston_semi_analytic` (Heston 1993's characteristic-function
+price, in the Albrecher et al. 2007 "Little Trap" branch-cut-safe form).
+
+**Independent verification, most-external-first (CLAUDE.md §2.5):**
+
+1. **A published reference, fetched and cited, not recalled.** Alan
+   Lewis's high-precision Heston reference prices
+   (`financepress.com/2019/02/15/heston-model-reference-prices/`,
+   "computed in Mathematica to high precision... confirmed by others to
+   at least 15-16 good digits") -- fetched this session, not written from
+   memory. `heston_semi_analytic` matched every one of Lewis's 5 strikes
+   (K=80..120) to **~1e-13 absolute error**, essentially full
+   double-precision agreement, on the first working build.
+   - **A real bug found and fixed by this check**: Lewis's page defines
+     the variance SDE as `dV = (omega - theta_L*V)dt + xi*sqrt(V)dW` --
+     his `theta_L` is *this project's* `kappa` (mean-reversion speed),
+     and his `omega` is `kappa*theta` in this project's own
+     `dv = kappa*(theta-v)dt + ...` convention. An initial run using
+     Lewis's `theta_L=4` as this project's `theta` directly (rather than
+     as `kappa`) priced K=100 at 42.92 against a true reference of 16.07
+     -- caught immediately by the reference check, not a subtle drift;
+     resolved by re-deriving the SDE correspondence term-by-term rather
+     than guessing at the mapping.
+2. **`phi(-i) == e^{(r-q)T}`**, an exact closed-form identity of the
+   characteristic function itself (the risk-neutral martingale property
+   `E^Q[S_T/S_0] = e^{(r-q)T}`), checked directly during development.
+3. **Put-call parity** on the semi-analytic price, same identity Phase 1
+   proves for every other pricer (`Heston.PutCallParityHoldsOnSemi
+   AnalyticPrice`).
+4. **The BSM limiting case** (`xi -> 0`, `v0 = theta` collapses Heston to
+   Black-Scholes with `sigma = sqrt(theta)`) -- self-contained, no
+   external data. A genuine numerical-conditioning finding surfaced here
+   too: the characteristic function divides by `xi^2`, so pushing `xi`
+   too close to zero *increases* floating-point cancellation error even
+   as the true model error shrinks -- swept `xi` from 1e-2 to 1e-7 and
+   found the Heston-vs-BSM gap bottoms out (~1e-6) around `xi=1e-5`, then
+   grows back to 2.4e-2 by `xi=1e-7`. The test uses `xi=1e-4`, inside the
+   well-conditioned region, not the smallest value that happened to pass.
+5. **Gauss-Legendre quadrature self-test** (`tests/gauss_legendre_test.cpp`):
+   nodes/weights computed from scratch via Newton-Raphson on Legendre
+   polynomials (not a transcribed table, same discipline Stretch Goal 3
+   applied to Sobol), verified by exact reproduction of
+   `int_{-1}^{1} x^k dx` for every `k` up to each order's exactness
+   degree, for orders 2 through 64.
+
+**QE Monte Carlo vs. the semi-analytic oracle**, matrix including a
+deliberately sub-Feller case to force real coverage of QE's high-noise
+branch (`2*kappa*theta < xi^2`, not just the well-behaved regime):
+
+| Case | Feller (`2*kappa*theta` vs `xi^2`) | QE price | SE | Semi-analytic | Deviation |
+|---|---|---:|---:|---:|---:|
+| Lewis reference | 2 > 1 (satisfied) | 16.170379 | 0.062754 | 16.070155 | 1.60 SE |
+| Sub-Feller stress case | 0.04 < 0.09 (violated) | 9.036566 | 0.023533 | 9.024401 | 0.52 SE |
+
+`Heston.VarianceNeverNegativeOrNanUnderExtremeSubFeller` (a deeply
+sub-Feller case, `2*kappa*theta=0.012` vs `xi^2=0.64`, 500,000 paths) --
+QE's whole reason for existing -- produced no NaN and no negative
+variance. `Heston.BiasShrinksAsStepCountIncreases` (5/20/100 steps):
+bias 0.451 -> 0.028 -> 0.048, a sharp drop then flattening within noise,
+consistent with QE's documented low discretization bias even at modest
+step counts.
+
+**Wired through mcd_cli, bindings, and the AWS demo**, per your explicit
+choice to wire it everywhere despite the larger parameter surface (5 new
+required fields: `v0, kappa, theta, xi, rho`): `mcd_cli`'s `heston`
+product (`request: "semi_analytic"` for the deterministic oracle, default
+for the QE Monte Carlo price), `mcd.HestonParams`/`heston_qe_european`/
+`heston_semi_analytic` in the Python bindings, the Lambda handler's
+`heston` product, and a `heston` entry in the AWS demo's Live Pricing
+product selector (opens on the Lewis reference parameters, so the panel's
+default state is itself a value already cross-checked against a real
+independent source).
+
+199/199 C++ tests passing on debug, release (`-Werror`), and ubsan (each
+run in full separately). 48/48 backend Python unit+smoke tests. 16/16
+frontend Vitest tests. clang-tidy clean (no errors).
+
 ## Sections (populated as later phases land)
 
 - CFA invariant results table

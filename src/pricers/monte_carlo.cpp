@@ -1,6 +1,7 @@
 #include "mcd/pricers/monte_carlo.hpp"
 
 #include "mcd/core/rng.hpp"
+#include "mcd/core/rng_simd.hpp"
 #include "mcd/core/stats.hpp"
 #include "mcd/core/thread_pool.hpp"
 #include "mcd/models/gbm.hpp"
@@ -24,16 +25,47 @@ McResult finish(const WelfordAccumulator& acc) noexcept {
                      .path_count = acc.count()};
 }
 
-// The single shared accumulation engine every pricer below funnels through. Always
-// partitions [0, path_count) into ThreadPool::logical_chunk_count() static contiguous
-// chunks and always merges them in fixed chunk-index order, regardless of
-// options.num_threads -- this fixed computational graph, not any particular execution
-// strategy, is what makes results bitwise identical across thread counts (see
-// docs/design/04-parallelism.md sec.2). For num_threads <= 1, chunks are computed by a
-// plain sequential loop on the calling thread -- same chunk boundaries and merge order
-// as the parallel path, just no thread-pool synchronization overhead, since determinism
-// comes from the algorithm, not from whether a pool literally executes it.
+// The shared chunk/thread dispatch every pricer below funnels through (directly, via
+// accumulate_paths, or via monte_carlo_terminal_simd's fast path). Always partitions
+// [0, path_count) into ThreadPool::logical_chunk_count() static contiguous chunks and
+// always merges them in fixed chunk-index order, regardless of num_threads -- this
+// fixed computational graph, not any particular execution strategy, is what makes
+// results bitwise identical across thread counts (see docs/design/04-parallelism.md
+// sec.2). For num_threads <= 1, chunks are computed by a plain sequential loop on the
+// calling thread -- same chunk boundaries and merge order as the parallel path, just
+// no thread-pool synchronization overhead, since determinism comes from the
+// algorithm, not from whether a pool literally executes it.
 //
+// compute_chunk(chunk_index, begin, end) must write into per_chunk[chunk_index] and
+// must depend on nothing but (chunk_index, begin, end) -- same purity requirement
+// accumulate_paths's run_one_path always had.
+template <typename ComputeChunk>
+McResult run_chunked_and_merge(std::uint64_t path_count, unsigned num_threads,
+                                ComputeChunk&& compute_chunk) noexcept {
+    const unsigned chunk_count = ThreadPool::logical_chunk_count();
+    std::array<PaddedWelford, kMaxLogicalChunks> per_chunk{};
+
+    auto run_one_chunk = [&](unsigned chunk_index, std::uint64_t begin,
+                              std::uint64_t end) noexcept {
+        compute_chunk(chunk_index, begin, end, per_chunk);
+    };
+
+    if (num_threads <= 1) {
+        for (unsigned chunk_index = 0; chunk_index < chunk_count; ++chunk_index) {
+            const auto [begin, end] = detail::chunk_bounds(chunk_index, path_count, chunk_count);
+            run_one_chunk(chunk_index, begin, end);
+        }
+    } else {
+        shared_thread_pool().parallel_for(path_count, num_threads, run_one_chunk);
+    }
+
+    WelfordAccumulator merged;
+    for (unsigned i = 0; i < chunk_count; ++i) {
+        merged.merge(per_chunk[i].acc);
+    }
+    return finish(merged);
+}
+
 // run_one_path(path_index, negate) -> double must be pure given (path_index, negate).
 template <typename RunOnePath>
 McResult accumulate_paths(std::uint64_t path_count, const McOptions& options,
@@ -47,41 +79,68 @@ McResult accumulate_paths(std::uint64_t path_count, const McOptions& options,
         return sample;
     };
 
-    const unsigned chunk_count = ThreadPool::logical_chunk_count();
-    std::array<PaddedWelford, kMaxLogicalChunks> per_chunk{};
+    return run_chunked_and_merge(
+        path_count, options.num_threads,
+        [&](unsigned chunk_index, std::uint64_t begin, std::uint64_t end,
+            std::array<PaddedWelford, kMaxLogicalChunks>& per_chunk) noexcept {
+            WelfordAccumulator local;
+            for (std::uint64_t path_index = begin; path_index < end; ++path_index) {
+                local.add(sample_at(path_index));
+            }
+            per_chunk[chunk_index].acc = local;
+        });
+}
 
-    auto compute_chunk = [&](unsigned chunk_index, std::uint64_t begin,
-                              std::uint64_t end) noexcept {
-        WelfordAccumulator local;
-        for (std::uint64_t path_index = begin; path_index < end; ++path_index) {
-            local.add(sample_at(path_index));
-        }
-        per_chunk[chunk_index].acc = local;
-    };
-
-    if (options.num_threads <= 1) {
-        for (unsigned chunk_index = 0; chunk_index < chunk_count; ++chunk_index) {
-            const auto [begin, end] = detail::chunk_bounds(chunk_index, path_count, chunk_count);
-            compute_chunk(chunk_index, begin, end);
-        }
-    } else {
-        shared_thread_pool().parallel_for(path_count, options.num_threads, compute_chunk);
-    }
-
-    WelfordAccumulator merged;
-    for (unsigned i = 0; i < chunk_count; ++i) {
-        merged.merge(per_chunk[i].acc);
-    }
-    return finish(merged);
+// Stretch Goal 4 (docs/design/11-simd.md sec.6): a SIMD-accelerated fast path for
+// terminal-spot-only pricing, used instead of accumulate_paths's generic per-path
+// loop when NEON is available. Draws 4 paths' normals via
+// standard_normal_variate_batch4 (bitwise identical to 4 individual scalar calls --
+// tests/rng_simd_test.cpp) and calls WelfordAccumulator::add in the same linear
+// path_index order accumulate_paths would, so this changes nothing about *what* gets
+// computed or the order it's summed in -- only how the underlying normal draw is
+// produced. Antithetic variates aren't handled here (mirrored draws don't benefit
+// from batching the same way); accumulate_paths handles that case unchanged.
+template <payoffs::Payoff P>
+McResult monte_carlo_terminal_simd(const models::GbmParams& params, const P& payoff,
+                                    std::uint64_t path_count, std::uint64_t seed,
+                                    unsigned num_threads) noexcept {
+    const double discount = std::exp(-params.rate * params.time);
+    return run_chunked_and_merge(
+        path_count, num_threads,
+        [&](unsigned chunk_index, std::uint64_t begin, std::uint64_t end,
+            std::array<PaddedWelford, kMaxLogicalChunks>& per_chunk) noexcept {
+            WelfordAccumulator local;
+            std::uint64_t path_index = begin;
+            for (; path_index + 4 <= end; path_index += 4) {
+                const std::array<double, 4> z4 = standard_normal_variate_batch4(seed, path_index);
+                for (double z : z4) {
+                    local.add(discount * payoff(models::gbm_terminal_spot(params, z)));
+                }
+            }
+            for (; path_index < end; ++path_index) {
+                const double z = standard_normal_variate(seed, path_index);
+                local.add(discount * payoff(models::gbm_terminal_spot(params, z)));
+            }
+            per_chunk[chunk_index].acc = local;
+        });
 }
 
 // Single draw, terminal-spot-only pricing (European, Digital). Shared so the
 // draw-step-payoff-discount logic isn't duplicated; does not change
-// monte_carlo_european's public signature or behavior.
+// monte_carlo_european's public signature or behavior. Dispatches to the SIMD fast
+// path above when it applies (NEON available, antithetic off); falls back to the
+// general accumulate_paths engine otherwise. Both produce bitwise-identical results
+// (see the SIMD path's own comment) -- this is a pure speed choice, not a behavior
+// choice.
 template <payoffs::Payoff P>
 McResult monte_carlo_terminal(const models::GbmParams& params, const P& payoff,
                                std::uint64_t path_count, std::uint64_t seed,
                                const McOptions& options) noexcept {
+    if constexpr (kHasNeon) {
+        if (!options.antithetic) {
+            return monte_carlo_terminal_simd(params, payoff, path_count, seed, options.num_threads);
+        }
+    }
     const double discount = std::exp(-params.rate * params.time);
     return accumulate_paths(path_count, options, [&](std::uint64_t path_index, bool negate) {
         const double z = standard_normal_variate(seed, path_index);
