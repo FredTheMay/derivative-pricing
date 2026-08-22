@@ -402,3 +402,114 @@ table.surface td:hover { transform: scale(1.06); z-index: 1; position: relative;
   nav.tabs { flex-direction: row; flex-wrap: wrap; }
   main.content { padding: 1.25rem 1rem 3rem; }
 }
+
+/* ---------- KaTeX (dark-theme override) ---------- */
+/* KaTeX's own CSS hardcodes color:#000 on .katex; currentColor-based glyphs (frac bars,
+   radicals) follow this override automatically. Verified visually against every formula
+   in the Learn tabs before shipping -- add more specific overrides only if something
+   still renders black. */
+.katex { color: var(--text-bright) !important; font-size: 1.05em; }
+.katex-block { display: block; margin: 0.6rem 0 1rem; overflow-x: auto; }
+
+/* ---------- sliders ---------- */
+.slider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.slider-field { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.slider-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.slider-label-row label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.slider-value {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--border-strong);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(155deg, var(--accent-strong), var(--accent) 70%);
+  border: 2px solid var(--bg-inset);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  transition: transform 0.12s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(155deg, var(--accent-strong), var(--accent) 70%);
+  border: 2px solid var(--bg-inset);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 99px;
+  background: var(--border-strong);
+}
+
+/* ---------- formula reference dot (MTM timeline marker) ---------- */
+.mtm-marker { transition: cx 0.15s ease, cy 0.15s ease; }
+
+/* ---------- yield-curve editor table ---------- */
+.curve-row-input {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-bright);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+button.ghost:hover { border-color: var(--accent); color: var(--accent-strong); }
