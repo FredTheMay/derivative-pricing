@@ -44,6 +44,13 @@ measurement. Live pricing, the convergence explorer, the variance-reduction
 comparison, the Greeks surface, and the CFA invariant table all call the real
 deployed engine.
 
+The site's "Learn" section is an interactive CFA Level I Derivatives
+dashboard (`docs/design/13-cfa-education-dashboard.md`): cost of carry,
+forward/futures mark-to-market valuation, FX forwards, interest rates/FRAs/
+futures, and options payoff/profit, each with live KaTeX formulas that
+recompute on every slider move, plus an option to overlay a real simulated
+premium from the deployed engine onto the options-payoff diagram.
+
 ## Build and run
 
 ```
@@ -142,7 +149,8 @@ This project doubles as a CFA Level I Derivatives study artifact:
 relationships the curriculum teaches (cost of carry, put-call parity,
 risk-neutral binomial valuation) are encoded as executable tests in
 `tests/cfa_invariants_test.cpp`, mapped module-by-module (numbers/topics
-only, no curriculum text) in `docs/cfa-mapping.md`.
+only, no curriculum text) in `docs/cfa-mapping.md`. The live demo's "Learn"
+section (above) turns that mapping into an interactive dashboard.
 
 ## Known, documented limitations
 
