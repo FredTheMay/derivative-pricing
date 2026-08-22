@@ -69,6 +69,7 @@ export function ForwardPricingLab() {
       </div>
 
       <FormulaCard
+        split
         chip="Discrete compounding"
         latex={LATEX_FV_DISCRETE}
         gloss="A dollar invested today grows by a fixed rate applied once per period -- the everyday compound-interest formula."
@@ -82,6 +83,7 @@ export function ForwardPricingLab() {
       </FormulaCard>
 
       <FormulaCard
+        split
         chip="Continuous compounding"
         latex={LATEX_FV_CONTINUOUS}
         gloss="The limit of compounding infinitely often -- growth is applied continuously rather than at fixed intervals."
@@ -101,6 +103,7 @@ export function ForwardPricingLab() {
       </FormulaCard>
 
       <FormulaCard
+        split
         chip="Forward price -- no cash flows"
         latex={LATEX_FORWARD_DISCRETE_NO_CF}
         gloss="With no income or storage cost, the fair forward price is just the spot price grown at the risk-free rate."
@@ -114,6 +117,7 @@ export function ForwardPricingLab() {
       </FormulaCard>
 
       <FormulaCard
+        split
         chip="Forward price -- discrete costs &amp; benefits"
         latex={LATEX_FORWARD_DISCRETE_WITH_CF}
         gloss="Income the asset pays out (dividends, coupons) is netted against the spot price before growing it forward; storage or carry costs add to it."
@@ -133,6 +137,7 @@ export function ForwardPricingLab() {
       </FormulaCard>
 
       <FormulaCard
+        split
         chip="Forward price -- continuous carry"
         latex={LATEX_FORWARD_CONTINUOUS_CARRY}
         gloss="The same income/cost tradeoff as above, expressed as continuous annualized rates instead of one-time present values."
@@ -164,10 +169,13 @@ export function ForwardPricingLab() {
             <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
             <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }} />
             <ReferenceLine y={s0} stroke="#7c8494" strokeDasharray="2 2" label={{ value: "S0", position: "insideTopLeft", fill: "#7c8494", fontSize: 11 }} />
-            <Line type="monotone" dataKey="noCf" name="No cash flows" stroke="#e8a33d" strokeWidth={2} dot={false} isAnimationActive={false} />
-            <Line type="monotone" dataKey="withCf" name="Discrete costs/benefits" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} />
-            <Line type="monotone" dataKey="carry" name="Continuous carry" stroke="#34d399" strokeWidth={2} dot={false} isAnimationActive={false} />
-            <ReferenceDot x={t} y={forwardPriceDiscreteNoCashFlows(s0, r, t)} r={4} fill="#e8a33d" stroke="#0a0e14" strokeWidth={1} />
+            <Line type="monotone" dataKey="noCf" name="No cash flows" stroke="#e8a33d" strokeWidth={2} dot={false}
+                  isAnimationActive animationDuration={250} animationEasing="ease-out" />
+            <Line type="monotone" dataKey="withCf" name="Discrete costs/benefits" stroke="#38bdf8" strokeWidth={2} dot={false}
+                  isAnimationActive animationDuration={250} animationEasing="ease-out" />
+            <Line type="monotone" dataKey="carry" name="Continuous carry" stroke="#34d399" strokeWidth={2} dot={false}
+                  isAnimationActive animationDuration={250} animationEasing="ease-out" />
+            <ReferenceDot x={t} y={forwardPriceDiscreteNoCashFlows(s0, r, t)} r={4} fill="#e8a33d" stroke="#0a0e14" strokeWidth={1} className="chart-marker" isFront />
           </LineChart>
         </ResponsiveContainer>
       </div>

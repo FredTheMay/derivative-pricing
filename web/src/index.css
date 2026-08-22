@@ -46,7 +46,12 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-body { margin: 0; background: var(--bg); }
+body {
+  margin: 0;
+  background:
+    radial-gradient(1100px 560px at 12% -8%, rgba(232, 163, 61, 0.05), transparent 60%),
+    var(--bg);
+}
 
 #root { min-height: 100svh; display: flex; flex-direction: column; }
 

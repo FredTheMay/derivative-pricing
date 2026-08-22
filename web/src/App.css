@@ -45,7 +45,7 @@
 .brand-name { font-weight: 800; font-size: 1.05rem; color: var(--text-bright); letter-spacing: -0.02em; }
 .brand-sub { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
 
-.live-badge {
+.engine-status {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -62,7 +62,7 @@
   width: fit-content;
 }
 
-.live-dot {
+.engine-status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -94,12 +94,13 @@ nav.tabs {
 }
 
 nav.tabs button {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.65rem;
   width: 100%;
   text-align: left;
-  padding: 0.55rem 0.65rem;
+  padding: 0.55rem 0.65rem 0.55rem 0.85rem;
   border: 1px solid transparent;
   background: transparent;
   border-radius: var(--radius-sm);
@@ -123,26 +124,55 @@ nav.tabs button.active {
   border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
+nav.tabs button.active::before {
+  content: "";
+  position: absolute;
+  left: -0.05rem;
+  top: 18%;
+  bottom: 18%;
+  width: 3px;
+  border-radius: 99px;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(232, 163, 61, 0.6);
+}
+
 nav.tabs button.active svg { opacity: 1; }
 
 .sidebar-footer {
   margin-top: auto;
   padding: 0.9rem 0.5rem 0.2rem;
   border-top: 1px solid var(--border);
-  font-size: 0.72rem;
-  color: var(--text-dim);
-  line-height: 1.5;
 }
 
-.sidebar-footer a { color: var(--text-dim); text-decoration: none; }
-.sidebar-footer a:hover { color: var(--accent); }
+.session-clock {
+  font-family: var(--mono);
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-bright);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-date {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-top: 0.15rem;
+}
 
 /* ---------- main column ---------- */
 main.content {
   flex: 1;
   min-width: 0;
   padding: 1.75rem clamp(1rem, 3vw, 2.5rem) 4rem;
-  max-width: 1080px;
+  max-width: 1360px;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.014) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.014) 1px, transparent 1px);
+  background-size: 34px 34px;
+  background-position: 0 0;
 }
 
 .panel {
@@ -175,6 +205,12 @@ main.content {
   box-shadow: var(--shadow-card);
   padding: 1.25rem 1.4rem;
   margin-bottom: 1.25rem;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.4);
 }
 
 .card + h3 { margin-top: 1.75rem; }
@@ -280,7 +316,10 @@ button.primary:disabled {
   grid-column: 1 / -1;
   background: linear-gradient(155deg, var(--accent-soft), transparent);
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-left: 3px solid var(--accent);
 }
+
+.stat-hero .value { text-shadow: 0 0 18px rgba(232, 163, 61, 0.28); }
 
 .stat .label {
   font-family: var(--mono);
@@ -485,8 +524,8 @@ input[type="range"]::-moz-range-track {
   background: var(--border-strong);
 }
 
-/* ---------- formula reference dot (MTM timeline marker) ---------- */
-.mtm-marker { transition: cx 0.15s ease, cy 0.15s ease; }
+/* ---------- chart reference-dot markers (smooth position transition as sliders move) ---------- */
+.chart-marker circle, .chart-marker { transition: cx 0.18s ease, cy 0.18s ease; }
 
 /* ---------- yield-curve editor table ---------- */
 .curve-row-input {
@@ -543,6 +582,7 @@ button.ghost:hover { border-color: var(--accent); color: var(--accent-strong); }
   padding: 1rem 1.25rem;
   margin: 0.75rem 0 0.6rem;
   overflow-x: auto;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), inset 0 0 24px rgba(0, 0, 0, 0.25);
 }
 
 .formula-card-eq .katex-block { margin: 0; }
@@ -555,21 +595,46 @@ button.ghost:hover { border-color: var(--accent); color: var(--accent-strong); }
   max-width: none;
 }
 
+.formula-card-main, .formula-card-aside { min-width: 0; }
+
+/* Compact calculator cards (equation + sliders/stat, no chart) pair the equation with its
+   controls side by side once there's room, instead of stretching a narrow single column
+   across the full card width -- chart-bearing cards never get this modifier, so a chart
+   always keeps the full card width. */
+@media (min-width: 760px) {
+  .formula-card-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 2.5rem;
+    align-items: center;
+  }
+
+  .formula-card-split .formula-card-gloss { margin-bottom: 0; }
+}
+
 /* ---------- dashboard (top-level playground tab) ---------- */
-.content-wide { max-width: 1440px; }
+.content-wide { max-width: 1720px; }
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
   gap: 1.25rem;
 }
 
 .dashboard-card {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
   padding: 1rem 1.1rem;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.dashboard-card:hover {
+  border-color: var(--border-strong);
+  border-top-color: var(--accent-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.4);
 }
 
 .dashboard-card-head {

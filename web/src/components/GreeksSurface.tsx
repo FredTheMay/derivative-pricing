@@ -107,12 +107,12 @@ export function GreeksSurface() {
       <h2>Greeks Surface</h2>
       <p>
         European Greeks over a spot/time grid (K=100, r=5%, &sigma;=20%, N=100,000 paths
-        per cell). Three methods: finite-difference, likelihood-ratio (LR's standard
-        error is dramatically lower than FD's for gamma near a discontinuity -- see the
-        validation report for the measured digital/barrier comparison), and pathwise
-        (cheap and precise for delta/vega/rho, but has no gamma at all -- pathwise
-        differentiates the payoff itself, and a payoff's second derivative at a kink is a
-        Dirac delta, not a number).
+        per cell). Three methods: finite-difference, likelihood-ratio (its standard
+        error runs dramatically lower than finite-difference's for gamma near a
+        discontinuity, such as a digital or barrier close to its knock level), and
+        pathwise (cheap and precise for delta/vega/rho, but has no gamma at all --
+        pathwise differentiates the payoff itself, and a payoff's second derivative at a
+        kink is a Dirac delta, not a number).
       </p>
 
       <div className="card">

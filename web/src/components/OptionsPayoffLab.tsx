@@ -149,7 +149,7 @@ export function OptionsPayoffLab() {
         </div>
       </div>
 
-      <FormulaCard chip={`${POSITIONS.find((p) => p.id === position)!.label} -- payoff`} latex={latex.payoff} gloss={glossFor(position)}>
+      <FormulaCard split chip={`${POSITIONS.find((p) => p.id === position)!.label} -- payoff`} latex={latex.payoff} gloss={glossFor(position)}>
         <div className="stat-row">
           <div className="stat">
             <span className="label">Payoff at ST</span>
@@ -178,11 +178,15 @@ export function OptionsPayoffLab() {
             <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
             <ReferenceLine y={0} stroke="#7c8494" strokeDasharray="2 2" />
             <ReferenceLine x={breakeven} stroke="#7c8494" strokeDasharray="2 2" label={{ value: "breakeven", position: "insideTopLeft", fill: "#7c8494", fontSize: 11 }} />
-            <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.22)" isAnimationActive={false} legendType="none" />
-            <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.22)" isAnimationActive={false} legendType="none" />
-            <Line type="monotone" dataKey="payoff" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} name="Payoff" />
-            <Line type="monotone" dataKey="profit" stroke="#e8a33d" strokeWidth={2.5} dot={false} isAnimationActive={false} name="Profit" />
-            <ReferenceDot x={sT} y={currentProfit} r={6} fill="#34d399" stroke="#0a0e14" strokeWidth={2} />
+            <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.22)"
+                  isAnimationActive animationDuration={250} animationEasing="ease-out" legendType="none" />
+            <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.22)"
+                  isAnimationActive animationDuration={250} animationEasing="ease-out" legendType="none" />
+            <Line type="monotone" dataKey="payoff" stroke="#38bdf8" strokeWidth={2} dot={false} name="Payoff"
+                  isAnimationActive animationDuration={250} animationEasing="ease-out" />
+            <Line type="monotone" dataKey="profit" stroke="#e8a33d" strokeWidth={2.5} dot={false} name="Profit"
+                  isAnimationActive animationDuration={250} animationEasing="ease-out" />
+            <ReferenceDot x={sT} y={currentProfit} r={6} fill="#34d399" stroke="#0a0e14" strokeWidth={2} className="chart-marker" isFront />
           </ComposedChart>
         </ResponsiveContainer>
       </FormulaCard>

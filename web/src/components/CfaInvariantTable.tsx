@@ -45,7 +45,8 @@ export function CfaInvariantTable() {
       <h2>CFA Level I Invariants -- Live</h2>
       <p>
         Computed live, this instant, by the deployed engine -- not a static screenshot.
-        See docs/cfa-mapping.md for the module-by-module rationale.
+        Every relationship below is one the CFA Level I curriculum teaches, grouped by
+        the learning module it comes from.
       </p>
 
       <div className="card">

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import "./App.css";
 import { Dashboard } from "./components/Dashboard";
 import { ForwardPricingLab } from "./components/ForwardPricingLab";
@@ -19,6 +19,30 @@ function Icon({ children }: { children: ReactNode }) {
          strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {children}
     </svg>
+  );
+}
+
+const CLOCK_FORMAT: Intl.DateTimeFormatOptions = {
+  hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, timeZone: "UTC",
+};
+const DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  weekday: "short", month: "short", day: "numeric", timeZone: "UTC",
+};
+
+// A ticking UTC clock, terminal-style -- every real trading desk display carries one.
+// Ticks client-side only; never a stand-in for market data (this site prices derivatives,
+// it doesn't quote them).
+function SessionClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="sidebar-footer">
+      <div className="session-clock">{now.toLocaleTimeString(undefined, CLOCK_FORMAT)} UTC</div>
+      <div className="session-date">{now.toLocaleDateString(undefined, DATE_FORMAT)}</div>
+    </div>
   );
 }
 
@@ -128,7 +152,7 @@ function App() {
           </div>
         </div>
 
-        <span className="live-badge"><span className="live-dot" />Live &mdash; AWS Lambda / Graviton</span>
+        <span className="engine-status"><span className="engine-status-dot" />Engine online</span>
 
         <span className="nav-group-label">Dashboard</span>
         <nav className="tabs">{renderGroup(DASHBOARD_TABS)}</nav>
@@ -139,12 +163,7 @@ function App() {
         <span className="nav-group-label">Explore</span>
         <nav className="tabs">{renderGroup(EXPLORE_TABS)}</nav>
 
-        <div className="sidebar-footer">
-          C++20 Monte Carlo engine &middot; real seeded pricing, real confidence
-          intervals, real measured performance.
-          <br />
-          <a href="https://github.com" target="_blank" rel="noreferrer">View the repository &rarr;</a>
-        </div>
+        <SessionClock />
       </aside>
 
       <main className={active === "dashboard" ? "content content-wide" : "content"}>

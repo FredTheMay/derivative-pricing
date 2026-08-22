@@ -71,9 +71,9 @@ export function ScalingChart() {
     <section>
       <h2>Thread Scaling &amp; False-Sharing A/B</h2>
       <p>
-        Precomputed, committed measurements from Phase 4 (docs/validation-report.md) --
-        never recomputed on request, since Lambda's shared vCPU allocation bears no
-        relationship to the dedicated-machine measurement this chart is about.
+        Precomputed, committed measurements from a dedicated benchmark run -- never
+        recomputed on request, since a shared cloud compute allocation bears no
+        relationship to the controlled multi-core measurement this chart is about.
       </p>
       {error && <p className="error">{error}</p>}
 

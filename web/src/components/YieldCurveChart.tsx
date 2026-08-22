@@ -57,13 +57,14 @@ export function YieldCurveChart({ curve, highlight = null, compact = false, heig
         {!compact && bridge && <Legend verticalAlign="top" height={24} wrapperStyle={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }} />}
         <Line
           data={sorted} dataKey="spotRate" name="Spot curve" stroke="#e8a33d" strokeWidth={2}
-          dot={{ r: compact ? 3 : 4, fill: "#e8a33d", strokeWidth: 0 }} isAnimationActive={false}
+          dot={{ r: compact ? 3 : 4, fill: "#e8a33d", strokeWidth: 0 }}
+          isAnimationActive animationDuration={250} animationEasing="ease-out"
         />
         {bridge && (
           <Line
             data={bridge} dataKey="forwardRate" name="Implied forward rate" stroke="#38bdf8"
             strokeWidth={2} strokeDasharray="4 3" dot={{ r: compact ? 3 : 4, fill: "#38bdf8", strokeWidth: 0 }}
-            isAnimationActive={false}
+            isAnimationActive animationDuration={250} animationEasing="ease-out"
           />
         )}
       </LineChart>

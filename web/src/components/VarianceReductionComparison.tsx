@@ -46,8 +46,7 @@ export function VarianceReductionComparison() {
       <h2>Variance Reduction: Antithetic On vs. Off</h2>
       <p>
         Same seed, same path count, antithetic variates on vs. off -- the variance-
-        reduction factor is the ratio of the squared standard errors. See Phase 3's factor
-        table in docs/validation-report.md for the full measured set across products.
+        reduction factor is the ratio of the squared standard errors.
       </p>
 
       <div className="card">

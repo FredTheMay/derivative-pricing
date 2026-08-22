@@ -145,6 +145,7 @@ export function RatesFraLab() {
       </FormulaCard>
 
       <FormulaCard
+        split
         chip="Periodicity conversion"
         latex={LATEX_PERIODICITY}
         gloss="The same annual rate quoted with a different compounding frequency is a different number -- this solves for the equivalent APR under a new frequency."
@@ -173,6 +174,7 @@ export function RatesFraLab() {
       </FormulaCard>
 
       <FormulaCard
+        split
         chip="FRA net payment"
         latex={LATEX_FRA_NET_PAYMENT}
         gloss="At settlement, whichever party is on the losing side of the rate move pays the other the present-value-adjusted difference between the market rate and the rate locked in by the FRA."
@@ -192,6 +194,7 @@ export function RatesFraLab() {
       </FormulaCard>
 
       <FormulaCard
+        split
         chip="Interest rate futures price"
         latex={LATEX_IR_FUTURES_PRICE}
         gloss="Short-term interest rate futures are quoted on an index-price basis: 100 minus the market reference rate, so the futures price falls as rates rise."
@@ -206,6 +209,7 @@ export function RatesFraLab() {
       </FormulaCard>
 
       <FormulaCard
+        split
         chip="Contract basis point value"
         latex={LATEX_CONTRACT_BPV}
         gloss="How much one contract's value changes for a one-basis-point move in rates -- the building block for sizing a futures hedge."

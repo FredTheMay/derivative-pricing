@@ -105,15 +105,19 @@ export function FxForwardLab() {
             <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
             <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }} />
             <ReferenceLine y={s0} stroke="#7c8494" strokeDasharray="2 2" label={{ value: "spot", position: "insideTopLeft", fill: "#7c8494", fontSize: 11 }} />
-            <Area dataKey="premiumRange" name="Forward premium" stroke="none" fill="rgba(52,211,153,0.22)" isAnimationActive={false} legendType="none" />
-            <Area dataKey="discountRange" name="Forward discount" stroke="none" fill="rgba(248,113,113,0.22)" isAnimationActive={false} legendType="none" />
-            <Line type="monotone" dataKey="forward" name="Forward price" stroke="#e8a33d" strokeWidth={2} dot={false} isAnimationActive={false} />
-            <ReferenceDot x={maturity} y={f0} r={4} fill="#e8a33d" stroke="#0a0e14" strokeWidth={1} />
+            <Area dataKey="premiumRange" name="Forward premium" stroke="none" fill="rgba(52,211,153,0.22)"
+                  isAnimationActive animationDuration={250} animationEasing="ease-out" legendType="none" />
+            <Area dataKey="discountRange" name="Forward discount" stroke="none" fill="rgba(248,113,113,0.22)"
+                  isAnimationActive animationDuration={250} animationEasing="ease-out" legendType="none" />
+            <Line type="monotone" dataKey="forward" name="Forward price" stroke="#e8a33d" strokeWidth={2} dot={false}
+                  isAnimationActive animationDuration={250} animationEasing="ease-out" />
+            <ReferenceDot x={maturity} y={f0} r={4} fill="#e8a33d" stroke="#0a0e14" strokeWidth={1} className="chart-marker" isFront />
           </ComposedChart>
         </ResponsiveContainer>
       </FormulaCard>
 
       <FormulaCard
+        split
         chip="Mark-to-market before expiration"
         latex={LATEX_FX_FORWARD_MTM}
         gloss="As spot moves and time passes, the contract's value drifts away from zero -- this is the P&amp;L a holder of the forward would realize by unwinding it today."

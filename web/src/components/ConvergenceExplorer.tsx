@@ -164,13 +164,12 @@ export function ConvergenceExplorer() {
         )}
       </div>
 
-      <h3>Sobol QMC vs. plain Monte Carlo (Stretch Goal 3)</h3>
+      <h3>Sobol QMC vs. Plain Monte Carlo</h3>
       <p>
         Sobol quasi-Monte Carlo with Brownian-bridge construction is deterministic --
         it has no standard error -- so its accuracy is measured directly against the
-        analytic price instead. Plotted log-log, Sobol's error should fall off faster
-        than plain MC's O(N<sup>-0.5</sup>) rate. See{" "}
-        <code>docs/design/10-sobol-qmc.md</code> sec.6.
+        analytic price instead. Plotted log-log, watch Sobol's error fall off faster
+        than plain MC's O(N<sup>-0.5</sup>) rate, against the two reference slopes below.
       </p>
 
       <div className="card">

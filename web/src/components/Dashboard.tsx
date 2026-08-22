@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import {
-  Area, ComposedChart, Line, LineChart, ReferenceDot, ResponsiveContainer,
+  Area, ComposedChart, Line, LineChart, ReferenceDot, ResponsiveContainer, XAxis, YAxis,
 } from "recharts";
 import { Slider } from "./Slider";
 import { YieldCurveChart } from "./YieldCurveChart";
@@ -176,8 +176,11 @@ export function Dashboard({ onOpenTab }: DashboardProps) {
           </div>
           <ResponsiveContainer width="100%" height={100}>
             <LineChart data={ccCurve}>
-              <Line type="monotone" dataKey="forward" stroke="#e8a33d" strokeWidth={2} dot={false} isAnimationActive={false} />
-              <ReferenceDot x={ccT} y={ccForward} r={4} fill="#e8a33d" stroke="#0a0e14" strokeWidth={1} />
+              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} hide />
+              <YAxis type="number" domain={["auto", "auto"]} hide />
+              <Line type="monotone" dataKey="forward" stroke="#e8a33d" strokeWidth={2} dot={false}
+                    isAnimationActive animationDuration={250} animationEasing="ease-out" />
+              <ReferenceDot x={ccT} y={ccForward} r={4} fill="#e8a33d" stroke="#0a0e14" strokeWidth={1} className="chart-marker" isFront />
             </LineChart>
           </ResponsiveContainer>
         </DashboardWidget>
@@ -200,10 +203,13 @@ export function Dashboard({ onOpenTab }: DashboardProps) {
           </div>
           <ResponsiveContainer width="100%" height={100}>
             <ComposedChart data={mtmCurve}>
-              <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.25)" isAnimationActive={false} />
-              <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.25)" isAnimationActive={false} />
-              <Line type="monotone" dataKey="vt" stroke="#e8a33d" strokeWidth={2} dot={false} isAnimationActive={false} />
-              <ReferenceDot x={mtmSt} y={mtmVt} r={4} fill="#38bdf8" stroke="#0a0e14" strokeWidth={1} />
+              <XAxis dataKey="st" type="number" domain={["dataMin", "dataMax"]} hide />
+              <YAxis type="number" domain={["auto", "auto"]} hide />
+              <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.25)" isAnimationActive animationDuration={250} animationEasing="ease-out" />
+              <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.25)" isAnimationActive animationDuration={250} animationEasing="ease-out" />
+              <Line type="monotone" dataKey="vt" stroke="#e8a33d" strokeWidth={2} dot={false}
+                    isAnimationActive animationDuration={250} animationEasing="ease-out" />
+              <ReferenceDot x={mtmSt} y={mtmVt} r={4} fill="#38bdf8" stroke="#0a0e14" strokeWidth={1} className="chart-marker" isFront />
             </ComposedChart>
           </ResponsiveContainer>
         </DashboardWidget>
@@ -290,10 +296,13 @@ export function Dashboard({ onOpenTab }: DashboardProps) {
           </div>
           <ResponsiveContainer width="100%" height={100}>
             <ComposedChart data={optCurve}>
-              <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.25)" isAnimationActive={false} />
-              <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.25)" isAnimationActive={false} />
-              <Line type="monotone" dataKey="profit" stroke="#e8a33d" strokeWidth={2} dot={false} isAnimationActive={false} />
-              <ReferenceDot x={optST} y={optProfit} r={4} fill="#38bdf8" stroke="#0a0e14" strokeWidth={1} />
+              <XAxis dataKey="sT" type="number" domain={["dataMin", "dataMax"]} hide />
+              <YAxis type="number" domain={["auto", "auto"]} hide />
+              <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.25)" isAnimationActive animationDuration={250} animationEasing="ease-out" />
+              <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.25)" isAnimationActive animationDuration={250} animationEasing="ease-out" />
+              <Line type="monotone" dataKey="profit" stroke="#e8a33d" strokeWidth={2} dot={false}
+                    isAnimationActive animationDuration={250} animationEasing="ease-out" />
+              <ReferenceDot x={optST} y={optProfit} r={4} fill="#38bdf8" stroke="#0a0e14" strokeWidth={1} className="chart-marker" isFront />
             </ComposedChart>
           </ResponsiveContainer>
         </DashboardWidget>

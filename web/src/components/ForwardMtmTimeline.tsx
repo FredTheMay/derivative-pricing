@@ -85,6 +85,7 @@ export function ForwardMtmTimeline() {
         </div>
 
         <FormulaCard
+          split
           chip="PV of the locked-in forward price"
           latex={LATEX_PV_OF_FORWARD}
           gloss="Discounting F0(T) back to today's valuation date t tells you what the original forward price is worth right now, before comparing it to the current spot."
@@ -121,10 +122,13 @@ export function ForwardMtmTimeline() {
               <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
               <ReferenceLine y={0} stroke="#7c8494" strokeDasharray="2 2" />
               <ReferenceLine x={pvOfF0} stroke="#7c8494" strokeDasharray="2 2" label={{ value: "breakeven", position: "insideTopLeft", fill: "#7c8494", fontSize: 11 }} />
-              <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.22)" isAnimationActive={false} legendType="none" />
-              <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.22)" isAnimationActive={false} legendType="none" />
-              <Area type="monotone" dataKey="vt" stroke="#e8a33d" strokeWidth={2.5} fill="none" isAnimationActive={false} name="Vt" />
-              <ReferenceDot x={st} y={vt} r={6} fill="#38bdf8" stroke="#0a0e14" strokeWidth={2} className="mtm-marker" />
+              <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.22)"
+                    isAnimationActive animationDuration={250} animationEasing="ease-out" legendType="none" />
+              <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.22)"
+                    isAnimationActive animationDuration={250} animationEasing="ease-out" legendType="none" />
+              <Area type="monotone" dataKey="vt" stroke="#e8a33d" strokeWidth={2.5} fill="none" name="Vt"
+                    isAnimationActive animationDuration={250} animationEasing="ease-out" />
+              <ReferenceDot x={st} y={vt} r={6} fill="#38bdf8" stroke="#0a0e14" strokeWidth={2} className="chart-marker" isFront />
             </ComposedChart>
           </ResponsiveContainer>
         </FormulaCard>
