@@ -50,9 +50,9 @@
   box-shadow: 0 2px 8px rgba(232, 163, 61, 0.35);
 }
 
-.brand-text { display: flex; flex-direction: column; line-height: 1.2; }
-.brand-name { font-weight: 800; font-size: 1.05rem; color: var(--text-bright); letter-spacing: -0.02em; }
-.brand-sub { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
+.brand-text { display: flex; flex-direction: column; line-height: 1.25; flex: 1; min-width: 0; }
+.brand-name { font-weight: 800; font-size: 0.88rem; color: var(--text-bright); letter-spacing: -0.01em; }
+.brand-sub { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); margin-top: 0.15rem; }
 
 .engine-status {
   display: inline-flex;
@@ -590,17 +590,18 @@ button.ghost:hover { border-color: var(--accent); color: var(--accent-strong); }
   padding: 0.22rem 0.65rem;
 }
 
+/* The formula sits directly on the card surface -- no separate panel/box around it, just
+   generous spacing and a hairline rule beneath to close off the "equation" beat before the
+   gloss starts, echoing the same divider language as the page header underline. */
 .formula-card-eq {
-  background: var(--bg-inset);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 1rem 1.25rem;
-  margin: 0.75rem 0 0.6rem;
+  padding: 0.4rem 0 1rem;
+  margin: 0.4rem 0 0.75rem;
   overflow-x: auto;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), inset 0 0 24px rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--border);
 }
 
 .formula-card-eq .katex-block { margin: 0; }
+.formula-card-eq .katex { font-size: 1.2em; }
 
 .formula-card-gloss {
   font-size: 0.82rem;

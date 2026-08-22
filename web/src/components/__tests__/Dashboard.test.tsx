@@ -5,7 +5,7 @@ import { Dashboard } from "../Dashboard";
 describe("Dashboard", () => {
   it("renders a snapshot stat for every concept and a widget per concept", () => {
     render(<Dashboard onOpenTab={() => {}} />);
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Derivative Pricing Engine by Frederic Lemay")).toBeInTheDocument();
     expect(screen.getByText("Cost of Carry")).toBeInTheDocument();
     expect(screen.getByText("Forward MTM")).toBeInTheDocument();
     expect(screen.getByText("FX Forwards")).toBeInTheDocument();

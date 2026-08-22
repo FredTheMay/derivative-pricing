@@ -149,8 +149,8 @@ function App() {
             </svg>
           </div>
           <div className="brand-text">
-            <span className="brand-name">mcd</span>
-            <span className="brand-sub">Derivatives Engine</span>
+            <span className="brand-name">Derivative Pricing Engine</span>
+            <span className="brand-sub">by Frederic Lemay</span>
           </div>
         </button>
 

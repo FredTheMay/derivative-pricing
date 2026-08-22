@@ -13,6 +13,11 @@ const num = (v: number) => v.toFixed(4);
 const pct = (v: number) => `${(v * 100).toFixed(2)}%`;
 const yrs = (v: number) => `${v.toFixed(2)}y`;
 
+// A very light axis for the mini-charts -- just the min/max tick, small and dim, so a
+// glance gives a sense of scale without turning a sparkline into a full chart.
+const lightAxisTick = { fontSize: 9, fill: "#4a5468", fontFamily: "'IBM Plex Mono', monospace" };
+const lightAxisLine = { stroke: "#1c2330" };
+
 const DEMO_CURVE = [
   { period: 0.5, spotRate: 0.02 },
   { period: 1, spotRate: 0.025 },
@@ -72,6 +77,13 @@ export function Dashboard({ onOpenTab }: DashboardProps) {
     }
     return points;
   }, [ccS0]);
+  // Explicit min/max ticks, computed once from the swept data -- Recharts' automatic "nice
+  // tick" generation recurses infinitely for some tiny tickCount/domain combinations on
+  // this version, so the mini-charts' light axes always pass their own literal tick values
+  // instead of relying on tickCount.
+  const ccForwardRange: [number, number] = [
+    Math.min(...ccCurve.map((p) => p.forward)), Math.max(...ccCurve.map((p) => p.forward)),
+  ];
 
   // ---- Forward MTM ----
   const [mtmT, setMtmT] = useState(0.5);
@@ -88,6 +100,9 @@ export function Dashboard({ onOpenTab }: DashboardProps) {
     }
     return points;
   }, [mtmF0, mtmT]);
+  const mtmVtRange: [number, number] = [
+    Math.min(...mtmCurve.map((p) => p.vt)), Math.max(...mtmCurve.map((p) => p.vt)),
+  ];
 
   // ---- FX forwards ----
   const [fxRf, setFxRf] = useState(0.03);
@@ -124,14 +139,19 @@ export function Dashboard({ onOpenTab }: DashboardProps) {
     }
     return points;
   }, [optPosition]);
+  const optProfitRange: [number, number] = [
+    Math.min(...optCurve.map((p) => p.profit)), Math.max(...optCurve.map((p) => p.profit)),
+  ];
 
   return (
     <section>
-      <h2>Dashboard</h2>
+      <h2>Derivative Pricing Engine by Frederic Lemay</h2>
       <p>
-        A compact playground across all five CFA Level I Derivatives topics -- each card
-        below is its own self-contained mini-calculator. Open the full calculator for the
-        formulas, gloss, and every control.
+        A Monte Carlo derivatives pricing and risk engine built from first principles in
+        C++20, paired with an interactive companion for CFA Level I Derivatives concepts.
+        Each card below is a self-contained mini-calculator across the five core concepts --
+        open the full calculator for every formula and control, or head to Explore in the
+        sidebar for live pricing, Greeks surfaces, and performance benchmarking.
       </p>
 
       <div className="stat-row dashboard-snapshot">
@@ -175,9 +195,12 @@ export function Dashboard({ onOpenTab }: DashboardProps) {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={100}>
-            <LineChart data={ccCurve}>
-              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} hide />
-              <YAxis type="number" domain={["auto", "auto"]} hide />
+            <LineChart data={ccCurve} margin={{ top: 4, right: 6, left: 0, bottom: 0 }}>
+              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} ticks={[0.1, 5]}
+                     tickLine={false} axisLine={lightAxisLine} tick={lightAxisTick}
+                     tickFormatter={(v: number) => `${v.toFixed(1)}y`} height={16} />
+              <YAxis type="number" domain={ccForwardRange} ticks={ccForwardRange} tickLine={false}
+                     axisLine={false} tick={lightAxisTick} width={34} tickFormatter={(v: number) => v.toFixed(0)} />
               <Line type="monotone" dataKey="forward" stroke="#e8a33d" strokeWidth={2} dot={false}
                     isAnimationActive animationDuration={250} animationEasing="ease-out" />
               <ReferenceDot x={ccT} y={ccForward} r={4} fill="#e8a33d" stroke="#0a0e14" strokeWidth={1} className="chart-marker" isFront />
@@ -202,9 +225,12 @@ export function Dashboard({ onOpenTab }: DashboardProps) {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={100}>
-            <ComposedChart data={mtmCurve}>
-              <XAxis dataKey="st" type="number" domain={["dataMin", "dataMax"]} hide />
-              <YAxis type="number" domain={["auto", "auto"]} hide />
+            <ComposedChart data={mtmCurve} margin={{ top: 4, right: 6, left: 0, bottom: 0 }}>
+              <XAxis dataKey="st" type="number" domain={["dataMin", "dataMax"]} ticks={[50, 150]}
+                     tickLine={false} axisLine={lightAxisLine} tick={lightAxisTick}
+                     tickFormatter={(v: number) => v.toFixed(0)} height={16} />
+              <YAxis type="number" domain={mtmVtRange} ticks={mtmVtRange} tickLine={false} axisLine={false}
+                     tick={lightAxisTick} width={30} tickFormatter={(v: number) => v.toFixed(1)} />
               <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.25)" isAnimationActive animationDuration={250} animationEasing="ease-out" />
               <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.25)" isAnimationActive animationDuration={250} animationEasing="ease-out" />
               <Line type="monotone" dataKey="vt" stroke="#e8a33d" strokeWidth={2} dot={false}
@@ -295,9 +321,12 @@ export function Dashboard({ onOpenTab }: DashboardProps) {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={100}>
-            <ComposedChart data={optCurve}>
-              <XAxis dataKey="sT" type="number" domain={["dataMin", "dataMax"]} hide />
-              <YAxis type="number" domain={["auto", "auto"]} hide />
+            <ComposedChart data={optCurve} margin={{ top: 4, right: 6, left: 0, bottom: 0 }}>
+              <XAxis dataKey="sT" type="number" domain={["dataMin", "dataMax"]} ticks={[50, 150]}
+                     tickLine={false} axisLine={lightAxisLine} tick={lightAxisTick}
+                     tickFormatter={(v: number) => v.toFixed(0)} height={16} />
+              <YAxis type="number" domain={optProfitRange} ticks={optProfitRange} tickLine={false}
+                     axisLine={false} tick={lightAxisTick} width={30} tickFormatter={(v: number) => v.toFixed(0)} />
               <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.25)" isAnimationActive animationDuration={250} animationEasing="ease-out" />
               <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.25)" isAnimationActive animationDuration={250} animationEasing="ease-out" />
               <Line type="monotone" dataKey="profit" stroke="#e8a33d" strokeWidth={2} dot={false}
