@@ -600,15 +600,20 @@ button.ghost:hover { border-color: var(--accent); color: var(--accent-strong); }
 /* Compact calculator cards (equation + sliders/stat, no chart) pair the equation with its
    controls side by side once there's room, instead of stretching a narrow single column
    across the full card width -- chart-bearing cards never get this modifier, so a chart
-   always keeps the full card width. */
+   always keeps the full card width. The chip lives outside .formula-card-body (see
+   FormulaCard.tsx) precisely so it can't push the equation column down relative to the
+   aside column; align-items: start plus zeroing each column's own leading margin is what
+   actually lines the equation box up with the first control/stat next to it. */
 @media (min-width: 760px) {
-  .formula-card-split {
+  .formula-card-split .formula-card-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 0 2.5rem;
-    align-items: center;
+    align-items: start;
   }
 
+  .formula-card-split .formula-card-eq { margin-top: 0; }
+  .formula-card-split .formula-card-aside > *:first-child { margin-top: 0; }
   .formula-card-split .formula-card-gloss { margin-bottom: 0; }
 }
 
