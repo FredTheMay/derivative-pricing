@@ -134,7 +134,7 @@ export function Dashboard({ onOpenTab }: DashboardProps) {
         formulas, gloss, and every control.
       </p>
 
-      <div className="stat-row">
+      <div className="stat-row dashboard-snapshot">
         <div className="stat">
           <span className="label">Forward price F0(T)</span>
           <span className="value">{num(ccForward)}</span>

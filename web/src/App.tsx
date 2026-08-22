@@ -46,14 +46,17 @@ function SessionClock() {
   );
 }
 
-// "Dashboard" (docs/design/14-visual-redesign.md) leads: a self-contained playground
-// touching every concept at a glance, independent of the 5 Learn calculator tabs' state
-// (see Dashboard.tsx's own header comment). "Learn" (CFA Level I Derivatives educational
-// dashboard -- docs/design/13-cfa-education-dashboard.md) follows: CLAUDE.md's own mission
-// statement names the CFA study artifact purpose alongside the systems-engineering one.
-// "Explore" (the original Phase 7 evidence-display tabs) comes last, unchanged in scope.
-// Dashboard's render is never used (its content area render is special-cased below, since
-// it alone needs the onOpenTab callback) -- kept only so it fits the shared TABS shape.
+// "dashboard" (docs/design/14-visual-redesign.md) is the site's home/default view -- a
+// self-contained playground touching every concept at a glance, independent of the 5 Learn
+// calculator tabs' state (see Dashboard.tsx's own header comment). It's reached by clicking
+// the brand mark, not a sidebar entry, so it isn't in LEARN_TABS/EXPLORE_TABS or any
+// nav-group-label below -- its TABS entry exists only so "dashboard" is a valid `active` id
+// and so its icon/group shape matches the rest of the array. "Learn" (CFA Level I
+// Derivatives educational dashboard -- docs/design/13-cfa-education-dashboard.md) leads the
+// visible nav: CLAUDE.md's own mission statement names the CFA study artifact purpose
+// alongside the systems-engineering one. "Explore" (the original Phase 7 evidence-display
+// tabs) follows, unchanged in scope. Dashboard's render is never used (its content area
+// render is special-cased below, since it alone needs the onOpenTab callback).
 const TABS = [
   {
     id: "dashboard", label: "Dashboard", group: "dashboard" as const,
@@ -117,7 +120,6 @@ const TABS = [
   },
 ] as const;
 
-const DASHBOARD_TABS = TABS.filter((t) => t.group === "dashboard");
 const LEARN_TABS = TABS.filter((t) => t.group === "learn");
 const EXPLORE_TABS = TABS.filter((t) => t.group === "explore");
 
@@ -140,7 +142,7 @@ function App() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">
+        <button type="button" className="brand" onClick={() => setActive("dashboard")} title="Go to the main dashboard">
           <div className="brand-mark">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1a1204" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 17l6-7 4 3 8-9" />
@@ -150,12 +152,9 @@ function App() {
             <span className="brand-name">mcd</span>
             <span className="brand-sub">Derivatives Engine</span>
           </div>
-        </div>
+        </button>
 
         <span className="engine-status"><span className="engine-status-dot" />Engine online</span>
-
-        <span className="nav-group-label">Dashboard</span>
-        <nav className="tabs">{renderGroup(DASHBOARD_TABS)}</nav>
 
         <span className="nav-group-label">Learn</span>
         <nav className="tabs">{renderGroup(LEARN_TABS)}</nav>

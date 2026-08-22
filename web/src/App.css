@@ -26,8 +26,17 @@
   gap: 0.6rem;
   padding: 0.4rem 0.5rem 1.1rem;
   margin-bottom: 0.75rem;
+  width: 100%;
+  background: transparent;
+  border: none;
   border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  transition: opacity 0.15s ease;
 }
+
+.brand:hover { opacity: 0.85; }
+.brand:hover .brand-mark { box-shadow: 0 2px 12px rgba(232, 163, 61, 0.5); }
 
 .brand-mark {
   width: 34px;
@@ -195,6 +204,12 @@ main.content {
   padding-bottom: 1.1rem;
   margin-bottom: 1.2rem;
   border-bottom: 1px solid var(--border);
+  /* The global `p { max-width: 68ch }` is a reading-width rule for body copy -- here it
+     would leave the underline shorter than the wide content column below it, looking cut
+     off. The intro line is usually only 1-3 sentences, so letting it use the full column
+     width costs little readability and keeps the rule visually consistent with everything
+     under it. */
+  max-width: none;
 }
 
 /* ---------- cards ---------- */
@@ -619,6 +634,8 @@ button.ghost:hover { border-color: var(--accent); color: var(--accent-strong); }
 
 /* ---------- dashboard (top-level playground tab) ---------- */
 .content-wide { max-width: 1720px; }
+
+.dashboard-snapshot { margin-bottom: 1.75rem; }
 
 .dashboard-grid {
   display: grid;
