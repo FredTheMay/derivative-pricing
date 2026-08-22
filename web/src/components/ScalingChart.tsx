@@ -47,6 +47,12 @@ export function ScalingChart() {
       .catch((e) => setError(String(e)));
   }, []);
 
+  const tooltipStyle = {
+    background: "#161c28", border: "1px solid #212838", borderRadius: 8,
+    fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#f2f4f8",
+  };
+  const axisStyle = { fill: "#7c8494", fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" };
+
   return (
     <section>
       <h2>Thread Scaling &amp; False-Sharing A/B</h2>
@@ -56,34 +62,49 @@ export function ScalingChart() {
         relationship to the dedicated-machine measurement this chart is about.
       </p>
       {error && <p className="error">{error}</p>}
+
       {scaling && (
-        <>
-          <p>Hardware: {scaling.hardware}. Amdahl serial fraction: {scaling.amdahl_serial_fraction}</p>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={scaling.points}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="threads" label={{ value: "threads", position: "insideBottom", offset: -5 }} />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="speedup" fill="#2166ac" name="speedup vs. 1 thread" />
+        <div className="card">
+          <div className="stat-row" style={{ marginTop: 0, marginBottom: "1rem" }}>
+            <div className="stat">
+              <span className="label">Hardware</span>
+              <span className="value" style={{ fontSize: "0.95rem" }}>{scaling.hardware}</span>
+            </div>
+            <div className="stat">
+              <span className="label">Amdahl serial fraction</span>
+              <span className="value">{scaling.amdahl_serial_fraction}</span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={scaling.points} margin={{ top: 8, right: 8, left: 0, bottom: 20 }}>
+              <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
+              <XAxis dataKey="threads" tick={axisStyle} stroke="#212838"
+                     label={{ value: "threads", position: "bottom", offset: 30, fill: "#7c8494", fontSize: 11 }} />
+              <YAxis tick={axisStyle} stroke="#212838" />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(232,163,61,0.06)" }} />
+              <Legend verticalAlign="top" height={32} wrapperStyle={{ fontSize: 12, color: "#7c8494" }} />
+              <Bar dataKey="speedup" fill="#e8a33d" radius={[4, 4, 0, 0]} name="speedup vs. 1 thread" />
             </BarChart>
           </ResponsiveContainer>
-        </>
+        </div>
       )}
+
       {falseSharing && (
         <>
           <h3>False-sharing A/B</h3>
           <p>{falseSharing.result}</p>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={falseSharing.layouts}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="layout" />
-              <YAxis label={{ value: "median ms", angle: -90, position: "insideLeft" }} />
-              <Tooltip />
-              <Bar dataKey="median_ms" fill="#b2182b" name="median time (ms)" />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="card">
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={falseSharing.layouts}>
+                <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
+                <XAxis dataKey="layout" tick={axisStyle} stroke="#212838" />
+                <YAxis tick={axisStyle} stroke="#212838"
+                       label={{ value: "median ms", angle: -90, position: "insideLeft", fill: "#7c8494", fontSize: 11 }} />
+                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(248,113,113,0.06)" }} />
+                <Bar dataKey="median_ms" fill="#f87171" radius={[4, 4, 0, 0]} name="median time (ms)" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </>
       )}
     </section>

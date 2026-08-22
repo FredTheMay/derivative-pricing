@@ -68,33 +68,65 @@ export function LivePricing() {
   }
 
   const hasCi = result !== null && "standard_error" in result;
+  const mc = hasCi ? (result as McPriceResult) : null;
 
   return (
     <section>
       <h2>Live Pricing</h2>
       <p>Every Monte Carlo product below always shows its 95% confidence interval, never a bare number.</p>
-      <select value={product} onChange={(e) => setProduct(e.target.value as Product)}>
-        {PRODUCTS.map((p) => <option key={p} value={p}>{p}</option>)}
-      </select>
-      <button onClick={run} disabled={loading}>{loading ? "Pricing..." : "Price"}</button>
-      {error && <p className="error">{error}</p>}
-      {result && (
-        <dl>
-          <dt>Price</dt><dd>{result.price.toFixed(6)}</dd>
-          {hasCi && (
-            <>
-              <dt>95% CI</dt>
-              <dd>
-                [{(result as McPriceResult).ci_95_low.toFixed(6)}, {(result as McPriceResult).ci_95_high.toFixed(6)}]
-                {" "}(SE={(result as McPriceResult).standard_error.toFixed(6)})
-              </dd>
-              <dt>Path count</dt><dd>{(result as McPriceResult).path_count.toLocaleString()}</dd>
-              <dt>Paths/second</dt><dd>{(result as McPriceResult).paths_per_second.toLocaleString(undefined, { maximumFractionDigits: 0 })}</dd>
-            </>
-          )}
-          {!hasCi && <p><em>Deterministic result -- no sampling error, so no confidence interval is reported.</em></p>}
-        </dl>
-      )}
+
+      <div className="card">
+        <div className="controls">
+          <div className="field">
+            <label htmlFor="product-select">Product</label>
+            <select id="product-select" value={product} onChange={(e) => setProduct(e.target.value as Product)}>
+              {PRODUCTS.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <button className="primary" onClick={run} disabled={loading} style={{ alignSelf: "flex-end" }}>
+            {loading && <span className="spinner" />}
+            {loading ? "Pricing..." : "Price"}
+          </button>
+        </div>
+
+        {error && <p className="error">{error}</p>}
+
+        {result && (
+          <div className="stat-row">
+            <div className="stat stat-hero">
+              <span className="label">Price</span>
+              <span className="value">{result.price.toFixed(6)}</span>
+            </div>
+            {mc && (
+              <>
+                <div className="stat">
+                  <span className="label">95% CI</span>
+                  <span className="value" style={{ fontSize: "0.95rem" }}>
+                    [{mc.ci_95_low.toFixed(6)}, {mc.ci_95_high.toFixed(6)}]
+                  </span>
+                </div>
+                <div className="stat">
+                  <span className="label">Standard error</span>
+                  <span className="value">{mc.standard_error.toFixed(6)}</span>
+                </div>
+                <div className="stat">
+                  <span className="label">Path count</span>
+                  <span className="value">{mc.path_count.toLocaleString()}</span>
+                </div>
+                <div className="stat">
+                  <span className="label">Paths/second</span>
+                  <span className="value">{mc.paths_per_second.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                </div>
+              </>
+            )}
+            {!hasCi && (
+              <p style={{ gridColumn: "1 / -1", margin: 0 }}>
+                <em>Deterministic result -- no sampling error, so no confidence interval is reported.</em>
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

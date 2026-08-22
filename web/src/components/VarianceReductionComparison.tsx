@@ -42,20 +42,37 @@ export function VarianceReductionComparison() {
         reduction factor is the ratio of the squared standard errors. See Phase 3's factor
         table in docs/validation-report.md for the full measured set across products.
       </p>
-      <button onClick={run} disabled={loading}>{loading ? "Pricing..." : "Compare"}</button>
-      {error && <p className="error">{error}</p>}
-      {plain && antithetic && (
-        <table>
-          <thead>
-            <tr><th></th><th>Price</th><th>Standard Error</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Plain</td><td>{plain.price.toFixed(4)}</td><td>{plain.standard_error.toFixed(5)}</td></tr>
-            <tr><td>Antithetic</td><td>{antithetic.price.toFixed(4)}</td><td>{antithetic.standard_error.toFixed(5)}</td></tr>
-          </tbody>
-        </table>
-      )}
-      {factor !== null && <p>Variance-reduction factor: <strong>{factor.toFixed(2)}x</strong></p>}
+
+      <div className="card">
+        <button className="primary" onClick={run} disabled={loading}>
+          {loading && <span className="spinner" />}
+          {loading ? "Pricing..." : "Compare"}
+        </button>
+        {error && <p className="error">{error}</p>}
+
+        {plain && antithetic && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th></th><th>Price</th><th>Standard Error</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Plain</td><td className="num">{plain.price.toFixed(4)}</td><td className="num">{plain.standard_error.toFixed(5)}</td></tr>
+                <tr><td>Antithetic</td><td className="num">{antithetic.price.toFixed(4)}</td><td className="num">{antithetic.standard_error.toFixed(5)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {factor !== null && (
+          <div className="stat-row">
+            <div className="stat stat-hero">
+              <span className="label">Variance-reduction factor</span>
+              <span className="value">{factor.toFixed(2)}x</span>
+            </div>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

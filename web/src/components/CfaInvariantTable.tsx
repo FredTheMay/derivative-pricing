@@ -25,30 +25,40 @@ export function CfaInvariantTable() {
         Computed live, this instant, by the deployed engine -- not a static screenshot.
         See docs/cfa-mapping.md for the module-by-module rationale.
       </p>
-      {loading && <p>Checking invariants...</p>}
-      {error && <p className="error">{error}</p>}
-      {rows && (
-        <>
-          <p className={allPass ? "status-pass" : "status-fail"}>
-            {allPass ? "All invariants pass." : "Some invariants failed -- see below."}
+
+      <div className="card">
+        {loading && (
+          <p style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span className="spinner" style={{ borderTopColor: "var(--accent)", borderColor: "var(--border)" }} />
+            Checking invariants...
           </p>
-          <table>
-            <thead>
-              <tr><th>Module</th><th>Invariant</th><th>Result</th><th>Deviation</th></tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={i} className={r.pass ? "status-pass" : "status-fail"}>
-                  <td>{r.module}</td>
-                  <td>{r.invariant}</td>
-                  <td>{r.pass ? "PASS" : "FAIL"}</td>
-                  <td>{r.deviation.toExponential(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
+        )}
+        {error && <p className="error">{error}</p>}
+        {rows && (
+          <>
+            <span className={`pill ${allPass ? "good" : "bad"}`}>
+              {allPass ? "All invariants pass." : "Some invariants failed -- see below."}
+            </span>
+            <div className="table-wrap" style={{ marginTop: "0.9rem" }}>
+              <table>
+                <thead>
+                  <tr><th>Module</th><th>Invariant</th><th>Result</th><th>Deviation</th></tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={i}>
+                      <td>{r.module}</td>
+                      <td>{r.invariant}</td>
+                      <td className={r.pass ? "status-pass" : "status-fail"}>{r.pass ? "PASS" : "FAIL"}</td>
+                      <td className="num">{r.deviation.toExponential(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 }

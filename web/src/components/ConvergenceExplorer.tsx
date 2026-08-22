@@ -1,6 +1,8 @@
 import { useState } from "react";
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Line,
   LineChart,
   ReferenceLine,
@@ -102,6 +104,12 @@ export function ConvergenceExplorer() {
     }
   }
 
+  const tooltipStyle = {
+    background: "#161c28", border: "1px solid #212838", borderRadius: 8,
+    fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#f2f4f8",
+  };
+  const axisStyle = { fill: "#7c8494", fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" };
+
   return (
     <section>
       <h2>Convergence Explorer</h2>
@@ -111,26 +119,34 @@ export function ConvergenceExplorer() {
         visibly narrow as path count grows and stay centered on the analytic
         Black-Scholes-Merton value ({analytic.toFixed(4)}).
       </p>
-      <button onClick={run} disabled={loading}>
-        {loading ? "Pricing..." : "Run convergence sweep"}
-      </button>
-      {error && <p className="error">{error}</p>}
-      {points.length > 0 && (
-        <ResponsiveContainer width="100%" height={320}>
-          <LineChart data={points}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="path_count" scale="log" domain={["auto", "auto"]} />
-            <YAxis domain={["auto", "auto"]} />
-            <Tooltip />
-            <ReferenceLine y={analytic} stroke="#888" strokeDasharray="4 4" label="BSM" />
-            <Line type="monotone" dataKey="price" stroke="#2166ac" name="price" />
-            <Line type="monotone" dataKey="ci_low" stroke="#b2182b" strokeDasharray="2 2"
-                  name="95% CI low" dot={false} />
-            <Line type="monotone" dataKey="ci_high" stroke="#b2182b" strokeDasharray="2 2"
-                  name="95% CI high" dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
+
+      <div className="card">
+        <button className="primary" onClick={run} disabled={loading}>
+          {loading && <span className="spinner" />}
+          {loading ? "Pricing..." : "Run convergence sweep"}
+        </button>
+        {error && <p className="error">{error}</p>}
+        {points.length > 0 && (
+          <ResponsiveContainer width="100%" height={320}>
+            <ComposedChart data={points} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="ciBand" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#e8a33d" stopOpacity={0.28} />
+                  <stop offset="100%" stopColor="#e8a33d" stopOpacity={0.06} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
+              <XAxis dataKey="path_count" scale="log" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838" />
+              <YAxis domain={["auto", "auto"]} tick={axisStyle} stroke="#212838" />
+              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
+              <ReferenceLine y={analytic} stroke="#38bdf8" strokeDasharray="4 4" label={{ value: "BSM", fill: "#38bdf8", fontSize: 11 }} />
+              <Area type="monotone" dataKey={(d: Point) => [d.ci_low, d.ci_high]}
+                    stroke="none" fill="url(#ciBand)" name="95% CI band" isAnimationActive />
+              <Line type="monotone" dataKey="price" stroke="#e8a33d" strokeWidth={2.5} dot={{ r: 3, fill: "#e8a33d" }} name="price" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+      </div>
 
       <h3>Sobol QMC vs. plain Monte Carlo (Stretch Goal 3)</h3>
       <p>
@@ -140,22 +156,27 @@ export function ConvergenceExplorer() {
         than plain MC's O(N<sup>-0.5</sup>) rate. See{" "}
         <code>docs/design/10-sobol-qmc.md</code> sec.6.
       </p>
-      <button onClick={runQmcComparison} disabled={qmcLoading}>
-        {qmcLoading ? "Comparing..." : "Compare with Sobol QMC"}
-      </button>
-      {qmcError && <p className="error">{qmcError}</p>}
-      {qmcPoints.length > 0 && (
-        <ResponsiveContainer width="100%" height={320}>
-          <LineChart data={qmcPoints}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="path_count" scale="log" domain={["auto", "auto"]} />
-            <YAxis scale="log" domain={["auto", "auto"]} label={{ value: "|error|", angle: -90 }} />
-            <Tooltip />
-            <Line type="monotone" dataKey="mc_error" stroke="#2166ac" name="plain MC |error|" />
-            <Line type="monotone" dataKey="qmc_error" stroke="#1a9850" name="Sobol QMC |error|" />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
+
+      <div className="card">
+        <button className="primary" onClick={runQmcComparison} disabled={qmcLoading}>
+          {qmcLoading && <span className="spinner" />}
+          {qmcLoading ? "Comparing..." : "Compare with Sobol QMC"}
+        </button>
+        {qmcError && <p className="error">{qmcError}</p>}
+        {qmcPoints.length > 0 && (
+          <ResponsiveContainer width="100%" height={320}>
+            <LineChart data={qmcPoints} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
+              <XAxis dataKey="path_count" scale="log" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838" />
+              <YAxis scale="log" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838"
+                     label={{ value: "|error|", angle: -90, fill: "#7c8494", fontSize: 11 }} />
+              <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
+              <Line type="monotone" dataKey="mc_error" stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} name="plain MC |error|" />
+              <Line type="monotone" dataKey="qmc_error" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} name="Sobol QMC |error|" />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
     </section>
   );
 }

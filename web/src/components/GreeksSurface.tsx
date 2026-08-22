@@ -63,11 +63,15 @@ export function GreeksSurface() {
   const min = flat.length ? Math.min(...flat) : 0;
   const max = flat.length ? Math.max(...flat) : 1;
 
+  // Cool (loss-side / low) -> warm accent (gain-side / high), matching the app's
+  // negative/accent palette rather than an arbitrary blue-red gradient.
   function cellColor(v: number): string {
     const t = max === min ? 0.5 : (v - min) / (max - min);
-    const r = Math.round(33 + t * (178 - 33));
-    const g = Math.round(102 + t * (24 - 102));
-    const b = Math.round(172 + t * (43 - 172));
+    const lo = { r: 56, g: 78, b: 110 };   // cool slate-blue, low values
+    const hi = { r: 232, g: 163, b: 61 };  // accent amber, high values
+    const r = Math.round(lo.r + t * (hi.r - lo.r));
+    const g = Math.round(lo.g + t * (hi.g - lo.g));
+    const b = Math.round(lo.b + t * (hi.b - lo.b));
     return `rgb(${r},${g},${b})`;
   }
 
@@ -83,46 +87,69 @@ export function GreeksSurface() {
         differentiates the payoff itself, and a payoff's second derivative at a kink is a
         Dirac delta, not a number).
       </p>
-      <select value={greek} onChange={(e) => setGreek(e.target.value as Greek)}>
-        {(["delta", "gamma", "vega", "theta", "rho"] as const).map((g) => (
-          <option key={g} value={g}>{g}</option>
-        ))}
-      </select>
-      <select value={method} onChange={(e) => setMethod(e.target.value as Method)}>
-        <option value="lr">Likelihood-ratio</option>
-        <option value="fd">Finite-difference</option>
-        <option value="pathwise">Pathwise</option>
-      </select>
-      <button onClick={run} disabled={loading || pathwiseDisabled}>
-        {loading ? "Computing..." : "Compute surface"}
-      </button>
-      {pathwiseDisabled && (
-        <p className="error">
-          Pathwise has no {greek} -- structurally undefined for this method, not just
-          unavailable here. Pick delta, vega, or rho, or switch method.
-        </p>
-      )}
-      {error && <p className="error">{error}</p>}
-      {grid && (
-        <table className="surface">
-          <thead>
-            <tr>
-              <th>S \ T</th>
-              {TIMES.map((t) => <th key={t}>{t}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {grid.map((row, i) => (
-              <tr key={SPOTS[i]}>
-                <th>{SPOTS[i]}</th>
-                {row.map((v, j) => (
-                  <td key={j} style={{ backgroundColor: cellColor(v) }}>{v.toFixed(3)}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+
+      <div className="card">
+        <div className="controls">
+          <div className="field">
+            <label htmlFor="greek-select">Greek</label>
+            <select id="greek-select" value={greek} onChange={(e) => setGreek(e.target.value as Greek)}>
+              {(["delta", "gamma", "vega", "theta", "rho"] as const).map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="method-select">Method</label>
+            <select id="method-select" value={method} onChange={(e) => setMethod(e.target.value as Method)}>
+              <option value="lr">Likelihood-ratio</option>
+              <option value="fd">Finite-difference</option>
+              <option value="pathwise">Pathwise</option>
+            </select>
+          </div>
+          <button className="primary" onClick={run} disabled={loading || pathwiseDisabled} style={{ alignSelf: "flex-end" }}>
+            {loading && <span className="spinner" />}
+            {loading ? "Computing..." : "Compute surface"}
+          </button>
+        </div>
+
+        {pathwiseDisabled && (
+          <p className="error">
+            Pathwise has no {greek} -- structurally undefined for this method, not just
+            unavailable here. Pick delta, vega, or rho, or switch method.
+          </p>
+        )}
+        {error && <p className="error">{error}</p>}
+
+        {grid && (
+          <>
+            <div className="table-wrap">
+              <table className="surface">
+                <thead>
+                  <tr>
+                    <th>S \ T</th>
+                    {TIMES.map((t) => <th key={t}>{t}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {grid.map((row, i) => (
+                    <tr key={SPOTS[i]}>
+                      <th>{SPOTS[i]}</th>
+                      {row.map((v, j) => (
+                        <td key={j} style={{ backgroundColor: cellColor(v) }}>{v.toFixed(3)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="legend">
+              <span>min {min.toFixed(3)}</span>
+              <span className="bar" style={{ background: `linear-gradient(90deg, rgb(56,78,110), rgb(232,163,61))` }} />
+              <span>max {max.toFixed(3)}</span>
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 }
