@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -47,6 +49,18 @@ export function ScalingChart() {
       .catch((e) => setError(String(e)));
   }, []);
 
+  // Amdahl's law's ideal speedup at each thread count, computed from the already-fetched
+  // serial fraction -- makes the gap between measured and theoretical-max scaling visible
+  // for the first time, instead of leaving the serial fraction as a bare stat number.
+  const pointsWithIdeal = useMemo(() => {
+    if (!scaling) return [];
+    const f = scaling.amdahl_serial_fraction;
+    return scaling.points.map((p) => ({
+      ...p,
+      idealSpeedup: 1 / (f + (1 - f) / p.threads),
+    }));
+  }, [scaling]);
+
   const tooltipStyle = {
     background: "#161c28", border: "1px solid #212838", borderRadius: 8,
     fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#f2f4f8",
@@ -76,7 +90,7 @@ export function ScalingChart() {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={scaling.points} margin={{ top: 8, right: 8, left: 0, bottom: 20 }}>
+            <ComposedChart data={pointsWithIdeal} margin={{ top: 8, right: 8, left: 0, bottom: 20 }}>
               <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
               <XAxis dataKey="threads" tick={axisStyle} stroke="#212838"
                      label={{ value: "threads", position: "bottom", offset: 30, fill: "#7c8494", fontSize: 11 }} />
@@ -84,7 +98,8 @@ export function ScalingChart() {
               <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(232,163,61,0.06)" }} />
               <Legend verticalAlign="top" height={32} wrapperStyle={{ fontSize: 12, color: "#7c8494" }} />
               <Bar dataKey="speedup" fill="#e8a33d" radius={[4, 4, 0, 0]} name="speedup vs. 1 thread" />
-            </BarChart>
+              <Line type="monotone" dataKey="idealSpeedup" stroke="#38bdf8" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3 }} name="Amdahl ideal" isAnimationActive={false} />
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}

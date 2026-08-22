@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Area,
   CartesianGrid,
   ComposedChart,
+  Legend,
   Line,
   LineChart,
   ReferenceLine,
@@ -73,6 +74,19 @@ export function ConvergenceExplorer() {
 
   const analytic = 10.4506; // BSM value for S=K=100, r=5%, q=0, sigma=20%, T=1 (European call)
 
+  // Theoretical reference slopes, anchored at the first measured MC error -- turns the
+  // prose claim below ("Sobol should beat O(N^-0.5)") into something the chart proves,
+  // not just asserts.
+  const qmcPointsWithRef = useMemo(() => {
+    if (qmcPoints.length === 0) return qmcPoints;
+    const anchor = qmcPoints[0];
+    return qmcPoints.map((p) => ({
+      ...p,
+      refHalf: anchor.mc_error * Math.sqrt(anchor.path_count / p.path_count),
+      refOne: anchor.mc_error * (anchor.path_count / p.path_count),
+    }));
+  }, [qmcPoints]);
+
   async function runQmcComparison() {
     setQmcLoading(true);
     setQmcError(null);
@@ -136,8 +150,10 @@ export function ConvergenceExplorer() {
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
-              <XAxis dataKey="path_count" scale="log" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838" />
-              <YAxis domain={["auto", "auto"]} tick={axisStyle} stroke="#212838" />
+              <XAxis dataKey="path_count" scale="log" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838"
+                     label={{ value: "path count", position: "bottom", offset: 0, fill: "#7c8494", fontSize: 11 }} />
+              <YAxis domain={["auto", "auto"]} tick={axisStyle} stroke="#212838"
+                     label={{ value: "price", angle: -90, position: "insideLeft", fill: "#7c8494", fontSize: 11 }} />
               <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
               <ReferenceLine y={analytic} stroke="#38bdf8" strokeDasharray="4 4" label={{ value: "BSM", fill: "#38bdf8", fontSize: 11 }} />
               <Area type="monotone" dataKey={(d: Point) => [d.ci_low, d.ci_high]}
@@ -163,14 +179,18 @@ export function ConvergenceExplorer() {
           {qmcLoading ? "Comparing..." : "Compare with Sobol QMC"}
         </button>
         {qmcError && <p className="error">{qmcError}</p>}
-        {qmcPoints.length > 0 && (
+        {qmcPointsWithRef.length > 0 && (
           <ResponsiveContainer width="100%" height={320}>
-            <LineChart data={qmcPoints} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+            <LineChart data={qmcPointsWithRef} margin={{ top: 10, right: 12, left: 0, bottom: 20 }}>
               <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
-              <XAxis dataKey="path_count" scale="log" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838" />
+              <XAxis dataKey="path_count" scale="log" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838"
+                     label={{ value: "path count", position: "bottom", offset: 0, fill: "#7c8494", fontSize: 11 }} />
               <YAxis scale="log" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838"
-                     label={{ value: "|error|", angle: -90, fill: "#7c8494", fontSize: 11 }} />
+                     label={{ value: "|error|", angle: -90, position: "insideLeft", fill: "#7c8494", fontSize: 11 }} />
               <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
+              <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }} />
+              <Line type="monotone" dataKey="refHalf" stroke="#7c8494" strokeWidth={1} strokeDasharray="3 3" dot={false} name="O(N^-0.5) reference" />
+              <Line type="monotone" dataKey="refOne" stroke="#7c8494" strokeWidth={1} strokeDasharray="1 3" dot={false} name="O(N^-1) reference" />
               <Line type="monotone" dataKey="mc_error" stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} name="plain MC |error|" />
               <Line type="monotone" dataKey="qmc_error" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} name="Sobol QMC |error|" />
             </LineChart>

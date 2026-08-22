@@ -16,6 +16,10 @@ describe("CfaInvariantTable", () => {
     render(<CfaInvariantTable />);
     await waitFor(() => expect(screen.getByText("All invariants pass.")).toBeInTheDocument());
     expect(screen.getAllByText("PASS")).toHaveLength(2);
+    // Summary roll-up: 2 total, 2 passed, 0 failed.
+    expect(screen.getByText("Total invariants").closest(".stat")?.querySelector(".value")?.textContent).toBe("2");
+    expect(screen.getByText("Passed").closest(".stat")?.querySelector(".value")?.textContent).toBe("2");
+    expect(screen.getByText("Failed").closest(".stat")?.querySelector(".value")?.textContent).toBe("0");
   });
 
   it("flags a failure clearly rather than hiding it", async () => {
@@ -30,5 +34,6 @@ describe("CfaInvariantTable", () => {
     render(<CfaInvariantTable />);
     await waitFor(() => expect(screen.getByText(/some invariants failed/i)).toBeInTheDocument());
     expect(screen.getByText("FAIL")).toBeInTheDocument();
+    expect(screen.getByText("Failed").closest(".stat")?.querySelector(".value")?.textContent).toBe("1");
   });
 });

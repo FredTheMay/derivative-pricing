@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ConfidenceIntervalBar } from "./ConfidenceIntervalBar";
 import { priceProduct, type AnalyticPriceResult, type McPriceResult, type OptionType } from "../api";
 
 const PRODUCTS = [
@@ -125,6 +126,12 @@ export function LivePricing() {
               </p>
             )}
           </div>
+        )}
+        {mc && (
+          <ConfidenceIntervalBar
+            low={mc.ci_95_low} high={mc.ci_95_high} value={mc.price}
+            format={(v) => v.toFixed(6)}
+          />
         )}
       </div>
     </section>

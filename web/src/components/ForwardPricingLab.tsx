@@ -1,5 +1,9 @@
-import { useState } from "react";
-import { Katex } from "./Katex";
+import { useMemo, useState } from "react";
+import {
+  CartesianGrid, Legend, Line, LineChart, ReferenceDot, ReferenceLine, ResponsiveContainer,
+  Tooltip, XAxis, YAxis,
+} from "recharts";
+import { FormulaCard } from "./FormulaCard";
 import { Slider } from "./Slider";
 import {
   futureValueDiscrete, futureValueContinuous,
@@ -12,6 +16,12 @@ import {
 const pct = (v: number) => `${(v * 100).toFixed(2)}%`;
 const num = (v: number) => v.toFixed(4);
 const yrs = (v: number) => `${v.toFixed(2)}y`;
+
+const tooltipStyle = {
+  background: "#161c28", border: "1px solid #212838", borderRadius: 8,
+  fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#f2f4f8",
+};
+const axisStyle = { fill: "#7c8494", fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" };
 
 // Section 1 (cost of carry). Every formula below is deterministic time-value-of-money
 // arithmetic -- no simulation, no network call -- so every slider recomputes every
@@ -26,6 +36,20 @@ export function ForwardPricingLab() {
   const [pvCost, setPvCost] = useState(1);
   const [income, setIncome] = useState(0.02);
   const [cost, setCost] = useState(0.01);
+
+  const termStructure = useMemo(() => {
+    const points = [];
+    for (let i = 0; i <= 40; i++) {
+      const sweptT = 0.1 + ((5 - 0.1) * i) / 40;
+      points.push({
+        t: sweptT,
+        noCf: forwardPriceDiscreteNoCashFlows(s0, r, sweptT),
+        withCf: forwardPriceDiscreteWithCashFlows(s0, pvIncome, pvCost, r, sweptT),
+        carry: forwardPriceContinuousCarry(s0, r, cost, income, sweptT),
+      });
+    }
+    return points;
+  }, [s0, r, pvIncome, pvCost, income, cost]);
 
   return (
     <section>
@@ -44,16 +68,24 @@ export function ForwardPricingLab() {
         </div>
       </div>
 
-      <h3>Discrete vs. continuous compounding</h3>
-      <div className="card">
-        <Katex latex={LATEX_FV_DISCRETE} />
+      <FormulaCard
+        chip="Discrete compounding"
+        latex={LATEX_FV_DISCRETE}
+        gloss="A dollar invested today grows by a fixed rate applied once per period -- the everyday compound-interest formula."
+      >
         <div className="stat-row">
           <div className="stat">
             <span className="label">FV (discrete, N=T periods)</span>
             <span className="value">{num(futureValueDiscrete(s0, r, t))}</span>
           </div>
         </div>
-        <Katex latex={LATEX_FV_CONTINUOUS} />
+      </FormulaCard>
+
+      <FormulaCard
+        chip="Continuous compounding"
+        latex={LATEX_FV_CONTINUOUS}
+        gloss="The limit of compounding infinitely often -- growth is applied continuously rather than at fixed intervals."
+      >
         <div className="stat-row">
           <div className="stat">
             <span className="label">FV (continuous)</span>
@@ -66,22 +98,26 @@ export function ForwardPricingLab() {
             </span>
           </div>
         </div>
-      </div>
+      </FormulaCard>
 
-      <h3>Forward price &mdash; no additional cash flows</h3>
-      <div className="card">
-        <Katex latex={LATEX_FORWARD_DISCRETE_NO_CF} />
+      <FormulaCard
+        chip="Forward price -- no cash flows"
+        latex={LATEX_FORWARD_DISCRETE_NO_CF}
+        gloss="With no income or storage cost, the fair forward price is just the spot price grown at the risk-free rate."
+      >
         <div className="stat-row">
           <div className="stat stat-hero">
             <span className="label">F&#8320;(T)</span>
             <span className="value">{num(forwardPriceDiscreteNoCashFlows(s0, r, t))}</span>
           </div>
         </div>
-      </div>
+      </FormulaCard>
 
-      <h3>Forward price &mdash; known discrete costs and benefits</h3>
-      <div className="card">
-        <Katex latex={LATEX_FORWARD_DISCRETE_WITH_CF} />
+      <FormulaCard
+        chip="Forward price -- discrete costs &amp; benefits"
+        latex={LATEX_FORWARD_DISCRETE_WITH_CF}
+        gloss="Income the asset pays out (dividends, coupons) is netted against the spot price before growing it forward; storage or carry costs add to it."
+      >
         <div className="slider-grid">
           <Slider label="PV0(I) -- income" value={pvIncome} min={0} max={20} step={0.5} onChange={setPvIncome} format={num} />
           <Slider label="PV0(C) -- cost" value={pvCost} min={0} max={20} step={0.5} onChange={setPvCost} format={num} />
@@ -94,11 +130,13 @@ export function ForwardPricingLab() {
             </span>
           </div>
         </div>
-      </div>
+      </FormulaCard>
 
-      <h3>Forward price &mdash; continuous income &amp; cost rates</h3>
-      <div className="card">
-        <Katex latex={LATEX_FORWARD_CONTINUOUS_CARRY} />
+      <FormulaCard
+        chip="Forward price -- continuous carry"
+        latex={LATEX_FORWARD_CONTINUOUS_CARRY}
+        gloss="The same income/cost tradeoff as above, expressed as continuous annualized rates instead of one-time present values."
+      >
         <div className="slider-grid">
           <Slider label="Income rate (i)" value={income} min={-0.05} max={0.1} step={0.0025} onChange={setIncome} format={pct} />
           <Slider label="Cost rate (c)" value={cost} min={-0.05} max={0.1} step={0.0025} onChange={setCost} format={pct} />
@@ -109,6 +147,29 @@ export function ForwardPricingLab() {
             <span className="value">{num(forwardPriceContinuousCarry(s0, r, cost, income, t))}</span>
           </div>
         </div>
+      </FormulaCard>
+
+      <h3>Forward price as maturity stretches out</h3>
+      <div className="card">
+        <p style={{ marginTop: 0 }}>
+          All three formulas agree at T=0 (the forward price collapses to spot) and diverge
+          as maturity lengthens -- carry costs and income pull the curves apart.
+        </p>
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={termStructure} margin={{ top: 10, right: 16, left: 0, bottom: 20 }}>
+            <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
+            <XAxis dataKey="t" type="number" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838"
+                   label={{ value: "time to maturity (T)", position: "bottom", offset: 0, fill: "#7c8494", fontSize: 11 }} />
+            <YAxis tick={axisStyle} stroke="#212838" width={56} />
+            <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
+            <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }} />
+            <ReferenceLine y={s0} stroke="#7c8494" strokeDasharray="2 2" label={{ value: "S0", position: "insideTopLeft", fill: "#7c8494", fontSize: 11 }} />
+            <Line type="monotone" dataKey="noCf" name="No cash flows" stroke="#e8a33d" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="withCf" name="Discrete costs/benefits" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="carry" name="Continuous carry" stroke="#34d399" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <ReferenceDot x={t} y={forwardPriceDiscreteNoCashFlows(s0, r, t)} r={4} fill="#e8a33d" stroke="#0a0e14" strokeWidth={1} />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </section>
   );

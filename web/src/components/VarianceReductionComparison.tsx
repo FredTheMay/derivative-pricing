@@ -1,5 +1,12 @@
 import { useState } from "react";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { priceProduct, type McPriceResult } from "../api";
+
+const tooltipStyle = {
+  background: "#161c28", border: "1px solid #212838", borderRadius: 8,
+  fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#f2f4f8",
+};
+const axisStyle = { fill: "#7c8494", fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" };
 
 // Section 3 (docs/design/07-aws-demo.md sec.4): antithetic/control-variate on vs. off,
 // live -- two seeded API calls, compared by standard error.
@@ -51,17 +58,37 @@ export function VarianceReductionComparison() {
         {error && <p className="error">{error}</p>}
 
         {plain && antithetic && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th></th><th>Price</th><th>Standard Error</th></tr>
-              </thead>
-              <tbody>
-                <tr><td>Plain</td><td className="num">{plain.price.toFixed(4)}</td><td className="num">{plain.standard_error.toFixed(5)}</td></tr>
-                <tr><td>Antithetic</td><td className="num">{antithetic.price.toFixed(4)}</td><td className="num">{antithetic.standard_error.toFixed(5)}</td></tr>
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr><th></th><th>Price</th><th>Standard Error</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Plain</td><td className="num">{plain.price.toFixed(4)}</td><td className="num">{plain.standard_error.toFixed(5)}</td></tr>
+                  <tr><td>Antithetic</td><td className="num">{antithetic.price.toFixed(4)}</td><td className="num">{antithetic.standard_error.toFixed(5)}</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart
+                data={[
+                  { label: "Plain", se: plain.standard_error },
+                  { label: "Antithetic", se: antithetic.standard_error },
+                ]}
+                margin={{ top: 10, right: 12, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
+                <XAxis dataKey="label" tick={axisStyle} stroke="#212838" />
+                <YAxis tick={axisStyle} stroke="#212838" label={{ value: "standard error", angle: -90, position: "insideLeft", fill: "#7c8494", fontSize: 11 }} />
+                <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
+                <Bar dataKey="se" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                  <Cell fill="#f87171" />
+                  <Cell fill="#34d399" />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </>
         )}
 
         {factor !== null && (

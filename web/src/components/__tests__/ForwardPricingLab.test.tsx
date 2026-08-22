@@ -3,9 +3,8 @@ import { describe, it, expect } from "vitest";
 import { ForwardPricingLab } from "../ForwardPricingLab";
 
 function noCashFlowsValue(): string | null {
-  const heading = screen.getByText("Forward price — no additional cash flows");
-  const card = heading.nextElementSibling as HTMLElement;
-  return card.querySelector(".value")?.textContent ?? null;
+  const chip = screen.getByText("Forward price -- no cash flows");
+  return chip.closest(".formula-card")?.querySelector(".value")?.textContent ?? null;
 }
 
 describe("ForwardPricingLab", () => {

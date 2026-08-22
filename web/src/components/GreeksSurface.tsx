@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import {
+  CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
 import { greeksEuropean, lrGreeksEuropean, pathwiseGreeksEuropean } from "../api";
 
 const SPOTS = [80, 90, 100, 110, 120];
@@ -65,15 +68,39 @@ export function GreeksSurface() {
 
   // Cool (loss-side / low) -> warm accent (gain-side / high), matching the app's
   // negative/accent palette rather than an arbitrary blue-red gradient.
-  function cellColor(v: number): string {
-    const t = max === min ? 0.5 : (v - min) / (max - min);
-    const lo = { r: 56, g: 78, b: 110 };   // cool slate-blue, low values
-    const hi = { r: 232, g: 163, b: 61 };  // accent amber, high values
-    const r = Math.round(lo.r + t * (hi.r - lo.r));
-    const g = Math.round(lo.g + t * (hi.g - lo.g));
-    const b = Math.round(lo.b + t * (hi.b - lo.b));
+  const GRADIENT_LO = { r: 56, g: 78, b: 110 };   // cool slate-blue, low values
+  const GRADIENT_HI = { r: 232, g: 163, b: 61 };  // accent amber, high values
+
+  function lerpColor(t: number): string {
+    const r = Math.round(GRADIENT_LO.r + t * (GRADIENT_HI.r - GRADIENT_LO.r));
+    const g = Math.round(GRADIENT_LO.g + t * (GRADIENT_HI.g - GRADIENT_LO.g));
+    const b = Math.round(GRADIENT_LO.b + t * (GRADIENT_HI.b - GRADIENT_LO.b));
     return `rgb(${r},${g},${b})`;
   }
+
+  function cellColor(v: number): string {
+    const t = max === min ? 0.5 : (v - min) / (max - min);
+    return lerpColor(t);
+  }
+
+  // Same grid, reshaped for a per-maturity line chart: one line per T slice, spot on the
+  // X axis -- the standard complementary way Greeks are visualized alongside a heatmap.
+  // Line colors reuse the heatmap's own cool-slate-to-amber gradient (by maturity index,
+  // not by value) so the two visuals share one color language.
+  const bySpot = useMemo(() => {
+    if (!grid) return null;
+    return SPOTS.map((spot, i) => {
+      const row: Record<string, number> = { spot };
+      TIMES.forEach((time, j) => { row[`t${time}`] = grid[i][j]; });
+      return row;
+    });
+  }, [grid]);
+
+  const tooltipStyle = {
+    background: "#161c28", border: "1px solid #212838", borderRadius: 8,
+    fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#f2f4f8",
+  };
+  const axisStyle = { fill: "#7c8494", fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" };
 
   return (
     <section>
@@ -147,6 +174,27 @@ export function GreeksSurface() {
               <span className="bar" style={{ background: `linear-gradient(90deg, rgb(56,78,110), rgb(232,163,61))` }} />
               <span>max {max.toFixed(3)}</span>
             </div>
+
+            {bySpot && (
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={bySpot} margin={{ top: 10, right: 12, left: 0, bottom: 20 }}>
+                  <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
+                  <XAxis dataKey="spot" type="number" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838"
+                         label={{ value: "spot", position: "bottom", offset: 0, fill: "#7c8494", fontSize: 11 }} />
+                  <YAxis tick={axisStyle} stroke="#212838"
+                         label={{ value: greek, angle: -90, position: "insideLeft", fill: "#7c8494", fontSize: 11 }} />
+                  <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
+                  <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11, fontFamily: "'IBM Plex Mono', monospace" }} />
+                  {TIMES.map((time, j) => (
+                    <Line
+                      key={time} type="monotone" dataKey={`t${time}`} name={`T=${time}`}
+                      stroke={lerpColor(j / (TIMES.length - 1))} strokeWidth={2} dot={{ r: 3 }}
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </>
         )}
       </div>

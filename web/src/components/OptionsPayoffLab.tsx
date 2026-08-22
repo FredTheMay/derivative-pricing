@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import {
-  CartesianGrid, Line, LineChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip,
-  XAxis, YAxis,
+  Area, CartesianGrid, ComposedChart, Line, ReferenceDot, ReferenceLine, ResponsiveContainer,
+  Tooltip, XAxis, YAxis,
 } from "recharts";
-import { Katex } from "./Katex";
+import { ConfidenceIntervalBar } from "./ConfidenceIntervalBar";
+import { FormulaCard } from "./FormulaCard";
 import { Slider } from "./Slider";
 import { priceEuropean, type McPriceResult } from "../api";
 import {
@@ -44,6 +45,17 @@ function latexFor(position: Position): { payoff: string; profit: string } {
     case "short_put": return { payoff: LATEX_LONG_PUT_PAYOFF, profit: LATEX_SHORT_PUT_PROFIT };
   }
 }
+function breakevenFor(position: Position, x: number, premium: number): number {
+  return position === "long_call" || position === "short_call" ? x + premium : x - premium;
+}
+function glossFor(position: Position): string {
+  switch (position) {
+    case "long_call": return "Unlimited upside above the strike, capped loss equal to the premium paid if the option expires worthless.";
+    case "short_call": return "Capped gain equal to the premium collected, unlimited loss if the underlying rallies past the strike.";
+    case "long_put": return "Gains as the underlying falls below the strike, capped loss equal to the premium paid if it expires worthless.";
+    case "short_put": return "Capped gain equal to the premium collected, large loss if the underlying falls well below the strike.";
+  }
+}
 
 const tooltipStyle = {
   background: "#161c28", border: "1px solid #212838", borderRadius: 8,
@@ -74,16 +86,20 @@ export function OptionsPayoffLab() {
   const latex = latexFor(position);
   const currentPayoff = payoffFor(position, sT, x);
   const currentProfit = profitFor(position, sT, x, premium);
+  const breakeven = breakevenFor(position, x, premium);
 
   const chartData = useMemo(() => {
     const lo = x * 0.5, hi = x * 1.5;
     const points = [];
     for (let i = 0; i <= 40; i++) {
       const sTSample = lo + ((hi - lo) * i) / 40;
+      const profit = profitFor(position, sTSample, x, premium);
       points.push({
         sT: sTSample,
         payoff: payoffFor(position, sTSample, x),
-        profit: profitFor(position, sTSample, x, premium),
+        profit,
+        pos: [0, Math.max(profit, 0)],
+        neg: [Math.min(profit, 0), 0],
       });
     }
     return points;
@@ -126,39 +142,50 @@ export function OptionsPayoffLab() {
             </select>
           </div>
         </div>
-
         <div className="slider-grid">
           <Slider label="Strike (X)" value={x} min={10} max={300} step={1} onChange={setX} format={num} />
           <Slider label="Spot at maturity (ST)" value={sT} min={x * 0.5} max={x * 1.5} step={1} onChange={setST} format={num} />
           <Slider label={position.includes("call") ? "Call premium (c0)" : "Put premium (p0)"} value={premium} min={0} max={50} step={0.1} onChange={setPremium} format={num} />
         </div>
+      </div>
 
-        <Katex latex={latex.payoff} />
-        <Katex latex={latex.profit} />
+      <FormulaCard chip={`${POSITIONS.find((p) => p.id === position)!.label} -- payoff`} latex={latex.payoff} gloss={glossFor(position)}>
         <div className="stat-row">
           <div className="stat">
             <span className="label">Payoff at ST</span>
             <span className="value">{num(currentPayoff)}</span>
           </div>
+        </div>
+      </FormulaCard>
+
+      <FormulaCard chip={`${POSITIONS.find((p) => p.id === position)!.label} -- profit`} latex={latex.profit} gloss="Profit nets the premium already paid or received against the payoff -- the breakeven is where this line crosses zero.">
+        <div className="stat-row">
           <div className="stat stat-hero">
             <span className="label">Profit at ST</span>
             <span className="value">{num(currentProfit)}</span>
           </div>
+          <div className="stat">
+            <span className="label">Breakeven ST</span>
+            <span className="value">{num(breakeven)}</span>
+          </div>
         </div>
 
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="#212838" strokeDasharray="3 3" />
             <XAxis dataKey="sT" type="number" domain={["auto", "auto"]} tick={axisStyle} stroke="#212838" />
             <YAxis tick={axisStyle} stroke="#212838" />
             <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#7c8494" }} />
             <ReferenceLine y={0} stroke="#7c8494" strokeDasharray="2 2" />
+            <ReferenceLine x={breakeven} stroke="#7c8494" strokeDasharray="2 2" label={{ value: "breakeven", position: "insideTopLeft", fill: "#7c8494", fontSize: 11 }} />
+            <Area dataKey="pos" stroke="none" fill="rgba(52,211,153,0.22)" isAnimationActive={false} legendType="none" />
+            <Area dataKey="neg" stroke="none" fill="rgba(248,113,113,0.22)" isAnimationActive={false} legendType="none" />
             <Line type="monotone" dataKey="payoff" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} name="Payoff" />
             <Line type="monotone" dataKey="profit" stroke="#e8a33d" strokeWidth={2.5} dot={false} isAnimationActive={false} name="Profit" />
             <ReferenceDot x={sT} y={currentProfit} r={6} fill="#34d399" stroke="#0a0e14" strokeWidth={2} />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
-      </div>
+      </FormulaCard>
 
       <h3>Fetch a real premium from the engine</h3>
       <div className="card">
@@ -179,26 +206,23 @@ export function OptionsPayoffLab() {
         </button>
         {fetchError && <p className="error">{fetchError}</p>}
         {fetched && (
-          <div className="stat-row">
-            <div className="stat stat-hero">
-              <span className="label">Real simulated premium (now applied above)</span>
-              <span className="value">{num(fetched.price)}</span>
+          <>
+            <div className="stat-row">
+              <div className="stat stat-hero">
+                <span className="label">Real simulated premium (now applied above)</span>
+                <span className="value">{num(fetched.price)}</span>
+              </div>
+              <div className="stat">
+                <span className="label">Standard error</span>
+                <span className="value">{num(fetched.standard_error)}</span>
+              </div>
+              <div className="stat">
+                <span className="label">Path count</span>
+                <span className="value">{fetched.path_count.toLocaleString()}</span>
+              </div>
             </div>
-            <div className="stat">
-              <span className="label">95% CI</span>
-              <span className="value" style={{ fontSize: "0.95rem" }}>
-                [{num(fetched.ci_95_low)}, {num(fetched.ci_95_high)}]
-              </span>
-            </div>
-            <div className="stat">
-              <span className="label">Standard error</span>
-              <span className="value">{num(fetched.standard_error)}</span>
-            </div>
-            <div className="stat">
-              <span className="label">Path count</span>
-              <span className="value">{fetched.path_count.toLocaleString()}</span>
-            </div>
-          </div>
+            <ConfidenceIntervalBar low={fetched.ci_95_low} high={fetched.ci_95_high} value={fetched.price} format={num} />
+          </>
         )}
       </div>
     </section>

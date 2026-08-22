@@ -15,6 +15,9 @@ describe("LivePricing", () => {
     fireEvent.click(screen.getByRole("button", { name: /^price$/i }));
     await waitFor(() => expect(screen.getByText("95% CI")).toBeInTheDocument());
     expect(screen.getByText(/10\.410000, 10\.490000/)).toBeInTheDocument();
+    // The confidence-interval bar renders the same bounds as its own tick labels.
+    expect(screen.getByText("10.410000")).toBeInTheDocument();
+    expect(screen.getByText("10.490000")).toBeInTheDocument();
   });
 
   it("prices Heston (Stretch Goal 5) and shows a confidence interval", async () => {

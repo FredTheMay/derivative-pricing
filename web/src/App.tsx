@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import "./App.css";
+import { Dashboard } from "./components/Dashboard";
 import { ForwardPricingLab } from "./components/ForwardPricingLab";
 import { ForwardMtmTimeline } from "./components/ForwardMtmTimeline";
 import { FxForwardLab } from "./components/FxForwardLab";
@@ -21,11 +22,20 @@ function Icon({ children }: { children: ReactNode }) {
   );
 }
 
-// "Learn" (CFA Level I Derivatives educational dashboard -- docs/design/13-cfa-education-
-// dashboard.md) comes first: CLAUDE.md's own mission statement names the CFA study
-// artifact purpose alongside the systems-engineering one, and this is the natural front
-// door for it. "Explore" (the original Phase 7 evidence-display tabs) follows unchanged.
+// "Dashboard" (docs/design/14-visual-redesign.md) leads: a self-contained playground
+// touching every concept at a glance, independent of the 5 Learn calculator tabs' state
+// (see Dashboard.tsx's own header comment). "Learn" (CFA Level I Derivatives educational
+// dashboard -- docs/design/13-cfa-education-dashboard.md) follows: CLAUDE.md's own mission
+// statement names the CFA study artifact purpose alongside the systems-engineering one.
+// "Explore" (the original Phase 7 evidence-display tabs) comes last, unchanged in scope.
+// Dashboard's render is never used (its content area render is special-cased below, since
+// it alone needs the onOpenTab callback) -- kept only so it fits the shared TABS shape.
 const TABS = [
+  {
+    id: "dashboard", label: "Dashboard", group: "dashboard" as const,
+    icon: <Icon><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="5" rx="1.5" /><rect x="13" y="10" width="8" height="10" rx="1.5" /><rect x="3" y="13" width="8" height="7" rx="1.5" /></Icon>,
+    render: () => null,
+  },
   {
     id: "forward-pricing", label: "Cost of Carry", group: "learn" as const,
     icon: <Icon><path d="M3 12h18M3 12l5-5M3 12l5 5" /><path d="M21 12l-5-5M21 12l-5 5" /></Icon>,
@@ -83,11 +93,12 @@ const TABS = [
   },
 ] as const;
 
+const DASHBOARD_TABS = TABS.filter((t) => t.group === "dashboard");
 const LEARN_TABS = TABS.filter((t) => t.group === "learn");
 const EXPLORE_TABS = TABS.filter((t) => t.group === "explore");
 
 function App() {
-  const [active, setActive] = useState<(typeof TABS)[number]["id"]>("forward-pricing");
+  const [active, setActive] = useState<(typeof TABS)[number]["id"]>("dashboard");
 
   function renderGroup(tabs: readonly (typeof TABS)[number][]) {
     return tabs.map((tab) => (
@@ -119,6 +130,9 @@ function App() {
 
         <span className="live-badge"><span className="live-dot" />Live &mdash; AWS Lambda / Graviton</span>
 
+        <span className="nav-group-label">Dashboard</span>
+        <nav className="tabs">{renderGroup(DASHBOARD_TABS)}</nav>
+
         <span className="nav-group-label">Learn</span>
         <nav className="tabs">{renderGroup(LEARN_TABS)}</nav>
 
@@ -133,9 +147,11 @@ function App() {
         </div>
       </aside>
 
-      <main className="content">
+      <main className={active === "dashboard" ? "content content-wide" : "content"}>
         <div className="panel" key={active}>
-          {TABS.find((t) => t.id === active)?.render()}
+          {active === "dashboard"
+            ? <Dashboard onOpenTab={(id) => setActive(id as (typeof TABS)[number]["id"])} />
+            : TABS.find((t) => t.id === active)?.render()}
         </div>
       </main>
     </div>

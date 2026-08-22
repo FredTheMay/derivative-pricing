@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Katex } from "./Katex";
+import { FormulaCard } from "./FormulaCard";
 import { Slider } from "./Slider";
+import { YieldCurveChart } from "./YieldCurveChart";
 import {
   computeDiscountFactors, impliedForwardRate, convertPeriodicity, fraNetPayment,
   irFuturesPrice, contractBpv,
@@ -22,8 +23,8 @@ function makeRow(period: number, spotRate: number): CurveRow {
 const PERIODICITIES = [1, 2, 4, 12, 365] as const;
 
 // Section 4 (rates, FRAs, futures) -- the most complex section, per docs/design/13-cfa-
-// education-dashboard.md: one scrollable panel, <h3>-divided cards, matching the
-// existing ConvergenceExplorer/ScalingChart multi-topic-in-one-component pattern rather
+// education-dashboard.md: one scrollable panel, formula cards divided by concept, matching
+// the existing ConvergenceExplorer/ScalingChart multi-topic-in-one-component pattern rather
 // than sub-tabs or an accordion (which would hide the yield-curve editor from the
 // calculators that depend on it). Only the IFR calculator depends on the shared curve
 // state; periodicity/FRA/futures each carry their own local, independent state.
@@ -80,9 +81,11 @@ export function RatesFraLab() {
         settlement, and interest rate futures.
       </p>
 
-      <h3>Spot-rate curve &amp; discount factors</h3>
-      <div className="card">
-        <Katex latex={LATEX_DISCOUNT_FACTOR} />
+      <FormulaCard
+        chip="Discount factor"
+        latex={LATEX_DISCOUNT_FACTOR}
+        gloss="The present value today of one dollar received at the end of period i, given the spot rate for that period -- editing a row below reshapes the curve live."
+      >
         <div className="table-wrap">
           <table>
             <thead>
@@ -106,12 +109,15 @@ export function RatesFraLab() {
             </tbody>
           </table>
         </div>
-        <button className="ghost" style={{ marginTop: "0.75rem" }} onClick={addRow}>+ Add period</button>
-      </div>
+        <button className="ghost" style={{ marginTop: "0.75rem", marginBottom: "0.75rem" }} onClick={addRow}>+ Add period</button>
+        <YieldCurveChart curve={curve} height={220} />
+      </FormulaCard>
 
-      <h3>Implied forward rate</h3>
-      <div className="card">
-        <Katex latex={LATEX_IFR} />
+      <FormulaCard
+        chip="Implied forward rate"
+        latex={LATEX_IFR}
+        gloss="The forward rate embedded in today's curve that reconciles investing to period B directly with investing to period A and rolling over to B -- the dashed segment below is what that rate 'bridges' on the curve."
+      >
         <div className="controls">
           <div className="field">
             <label htmlFor="ifr-a">Period A</label>
@@ -132,11 +138,17 @@ export function RatesFraLab() {
             <span className="value">{ifrResult === null ? "Pick B > A" : pct(ifrResult)}</span>
           </div>
         </div>
-      </div>
+        <YieldCurveChart
+          curve={curve} height={220}
+          highlight={ifrResult !== null ? { periodA: ifrPeriodA, periodB: ifrPeriodB, forwardRate: ifrResult } : null}
+        />
+      </FormulaCard>
 
-      <h3>Periodicity conversion</h3>
-      <div className="card">
-        <Katex latex={LATEX_PERIODICITY} />
+      <FormulaCard
+        chip="Periodicity conversion"
+        latex={LATEX_PERIODICITY}
+        gloss="The same annual rate quoted with a different compounding frequency is a different number -- this solves for the equivalent APR under a new frequency."
+      >
         <div className="controls">
           <div className="field">
             <label htmlFor="apr-m">Compounding freq. m</label>
@@ -158,11 +170,13 @@ export function RatesFraLab() {
             <span className="value">{pct(aprN)}</span>
           </div>
         </div>
-      </div>
+      </FormulaCard>
 
-      <h3>FRA net payment</h3>
-      <div className="card">
-        <Katex latex={LATEX_FRA_NET_PAYMENT} />
+      <FormulaCard
+        chip="FRA net payment"
+        latex={LATEX_FRA_NET_PAYMENT}
+        gloss="At settlement, whichever party is on the losing side of the rate move pays the other the present-value-adjusted difference between the market rate and the rate locked in by the FRA."
+      >
         <div className="slider-grid">
           <Slider label="MRR at settlement" value={mrr} min={0} max={0.15} step={0.001} onChange={setMrr} format={pct} />
           <Slider label="Contract IFR" value={ifr} min={0} max={0.15} step={0.001} onChange={setIfr} format={pct} />
@@ -175,20 +189,27 @@ export function RatesFraLab() {
             <span className="value">{netPayment.toFixed(2)}</span>
           </div>
         </div>
-      </div>
+      </FormulaCard>
 
-      <h3>Interest rate futures</h3>
-      <div className="card">
-        <Katex latex={LATEX_IR_FUTURES_PRICE} />
+      <FormulaCard
+        chip="Interest rate futures price"
+        latex={LATEX_IR_FUTURES_PRICE}
+        gloss="Short-term interest rate futures are quoted on an index-price basis: 100 minus the market reference rate, so the futures price falls as rates rise."
+      >
         <Slider label="MRR" value={futuresMrr} min={0} max={0.15} step={0.0005} onChange={setFuturesMrr} format={pct} />
         <div className="stat-row">
-          <div className="stat">
+          <div className="stat stat-hero">
             <span className="label">Futures price</span>
             <span className="value">{futuresPrice.toFixed(4)}</span>
           </div>
         </div>
+      </FormulaCard>
 
-        <Katex latex={LATEX_CONTRACT_BPV} />
+      <FormulaCard
+        chip="Contract basis point value"
+        latex={LATEX_CONTRACT_BPV}
+        gloss="How much one contract's value changes for a one-basis-point move in rates -- the building block for sizing a futures hedge."
+      >
         <div className="slider-grid">
           <Slider label="Notional principal" value={futuresNotional} min={100_000} max={10_000_000} step={100_000} onChange={setFuturesNotional} format={money} />
           <Slider label="Period (years)" value={futuresPeriod} min={0.0833} max={1} step={0.0833} onChange={setFuturesPeriod} format={(v) => v.toFixed(4)} />
@@ -199,7 +220,7 @@ export function RatesFraLab() {
             <span className="value">{bpv.toFixed(2)}</span>
           </div>
         </div>
-      </div>
+      </FormulaCard>
     </section>
   );
 }
